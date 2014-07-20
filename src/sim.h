@@ -10,13 +10,14 @@
 namespace sim {
   typedef double real;
 
-  const unsigned INTERIM_REPORT_PARM = 0;
-  const unsigned START_DATE_PARM = 1;
-  const unsigned MORTALITY_RISK_PARM = 2;
-  const unsigned TIME_STEP_SIZE_PARM = 3;
-  const unsigned NUM_TIME_STEPS_PARM = 4;
-  const unsigned PROB_MALE_PARM = 5;
-
+  enum parameters {
+    INTERIM_REPORT_PARM = 0,
+    START_DATE_PARM,
+    MORTALITY_RISK_PARM,
+    TIME_STEP_SIZE_PARM,
+    NUM_TIME_STEPS_PARM,
+    PROB_MALE_PARM
+  };
   const unsigned NUM_MORTALITY_PARMS = 120;
 
   const unsigned CURRENT_DATE_STATE = 0;
@@ -25,31 +26,53 @@ namespace sim {
   const unsigned DEATH_AGE_STATE = 3;
   const unsigned SEX_STATE = 4;
 
-  const unsigned MALE = 0;
-  const unsigned FEMALE = 1;
+  enum gender {
+    MALE = 0,
+    FEMALE = 1
+  };
 
-  const unsigned DEAD = 0;
-  const unsigned ALIVE = 1;
+  enum live_status {
+    DEAD = 0,
+    ALIVE = 1
+  };
 
   class Agent;
+  class Simulation;
 
-  typedef  std::list< std::function < void() > > GlobalEvents;
-  typedef  std::list< std::function < void(std::vector<Agent> &,
-					   Agent &) > > AgentEvents;
-  typedef  std::list< std::pair < unsigned,
-	  std::function < void(std::vector<Agent> &) > > > Reports;
+  // This looks scary but is simply an initializer list of pairs of integers and
+  // probability distributions. For example:
+  //   perturber dists = {
+  //      {SOME_PARM_1, uniform_real_distribution<>(-100.0, 100.0)},
+  //      {SOME_PARM_5, weibull_distribution<>(1, 20.0)},
+  //      {SOME_PARM_8, normal_distribution<>(40, 20)}
+  //   };
+  // Where SOME_PARM_1 etc are parameter enumerations.
+  // It is used for Monte Carlo simulation.
 
-  std::mt19937_64 rng;
+  typedef std::initializer_list <
+    std::pair < std::vector<double>::size_type,
+		std::function<double(std::mt19937_64 &)>> > Perturbers;
+
+  typedef std::function < void(Simulation *) > GlobalEvent;
+  typedef std::list< GlobalEvent > GlobalEvents;
+  typedef std::function < void(Simulation *,
+			       std::vector<Agent> &,
+			       Agent &) >  AgentEvent;
+  typedef std::list< AgentEvent > AgentEvents;
+  typedef std::pair < unsigned,
+		      std::function < void(Simulation *,
+					   std::vector<Agent> &) > > Report;
+  typedef std::list< Report > Reports;
 
   class Data {
   public:
-	  std::vector < real > values;
-	  inline real get(const size_t n = 0) const { return values[n]; }
-	  inline void set(const size_t n, const real & val) { values[n] = val; }
-	  inline void set(const real & val) { set(0, val); }
-	  inline void set(const std::initializer_list<real> & list) {
-		  values = list;
-	  }
+    std::vector < real > values;
+    inline real get(const size_t n = 0) const { return values[n]; }
+    inline void set(const size_t n, const real & val) { values[n] = val; }
+    inline void set(const real & val) { set(0, val); }
+    inline void set(const std::initializer_list<real> & list) {
+      values = list;
+    }
   };
 
   typedef Data Parameter;
@@ -57,34 +80,48 @@ namespace sim {
 
   class DataMap {
   public:
-	  std::unordered_map<unsigned, Data> dataMap;
-	  inline Data& operator[] ( const unsigned& k ) { return dataMap[k]; };
-	  inline Data& operator[] ( unsigned&& k )  { return dataMap[k]; };
-	  inline real & get(const unsigned & k, const size_t n = 0) {
-		  return dataMap[k].values[n];
-	  }
-	  inline void set(const unsigned & k, const size_t n, const real val) {
-		  dataMap[k].values[n] = val;
-	  }
-	  inline void set(const unsigned & k, const real val) {
-		  set(k, 0, val);
-	  }
-	  inline void set(const unsigned & k,
-			  const std::initializer_list<real> & list) {
-		  dataMap[k].values = list;
-	  }
+    std::unordered_map<unsigned, Data> dataMap;
+    inline Data& operator[] ( const unsigned& k ) { return dataMap[k]; };
+    inline Data& operator[] ( unsigned&& k )  { return dataMap[k]; };
+    inline real & get(const unsigned & k, const size_t n = 0) {
+      return dataMap[k].values[n];
+    }
+    inline void set(const unsigned & k, const size_t n, const real val) {
+      dataMap[k].values[n] = val;
+    }
+    inline void set(const unsigned & k, const real val) {
+      set(k, 0, val);
+    }
+    inline void set(const unsigned & k,
+		    const std::initializer_list<real> & list) {
+      dataMap[k].values = list;
+    }
   };
 
   typedef DataMap ParameterMap;
   typedef DataMap StateMap;
 
-  ParameterMap parameterMap;
-  StateMap stateMap;
-
   class Agent {
   public:
-	  DataMap states;
-	  AgentEvents events;
+    DataMap states;
+    AgentEvents events;
+  };
+
+  class Simulation {
+  private:
+    ParameterMap savedParameters_;
+    void perturb_parameters(const Perturbers& peturbers);
+  public:
+    std::mt19937_64 rng;
+    ParameterMap parameters;
+    StateMap states;
+    GlobalEvents events;
+    Reports reports;
+    std::vector<Agent> agents;
+    virtual void simulate();
+    void montecarlo(const Perturbers& peturbers,
+		    std::function<bool(const Simulation *,
+				       unsigned)> carryon);
   };
 }
 

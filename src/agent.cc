@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <iostream>
+#include <random>
 
 #include "sim.h"
 
@@ -10,41 +11,41 @@ private:
   real time_step_size_;
 public:
   IncrementTime(real time_step_size) : time_step_size_(time_step_size) {}
-  void operator()() {
-    stateMap.get(CURRENT_DATE_STATE) += time_step_size_;
+  void operator()(Simulation* s) {
+    s->states.get(CURRENT_DATE_STATE) += time_step_size_;
   }
 };
 
 
-void die_event(std::vector<Agent> & agents, Agent &agent)
+void die_event(Simulation *s, std::vector<Agent> & agents, Agent &agent)
 {
   if (agent.states.get(ALIVE_STATE) == DEAD)
     return;
 
   std::uniform_real_distribution<> dis;
 
-  real age_d = stateMap.get(CURRENT_DATE_STATE) - agent.states.get(DOB_STATE);
+  real age_d = s->states.get(CURRENT_DATE_STATE) - agent.states.get(DOB_STATE);
 
   unsigned age = round(age_d);
 
   unsigned parm_index = NUM_MORTALITY_PARMS * agent.states.get(SEX_STATE) + age;
 
-  real risk = pow((1.0 + parameterMap.get(MORTALITY_RISK_PARM, parm_index)),
-		   parameterMap.get(TIME_STEP_SIZE_PARM)) - 1.0;
+  real risk = pow((1.0 + s->parameters.get(MORTALITY_RISK_PARM, parm_index)),
+		   s->parameters.get(TIME_STEP_SIZE_PARM)) - 1.0;
 
-  if (dis(rng) < risk) {
+  if (dis(s->rng) < risk) {
     agent.states.get(ALIVE_STATE) = DEAD;
     agent.states.set(DEATH_AGE_STATE, {age_d});
   }
 }
 
 
-void mortality_parm_init()
+void mortality_parm_init(Simulation *s)
 {
   // US life tables.
   // Source: http://www.ssa.gov/oact/STATS/table4c6.html
   // MALES
-  parameterMap.set(MORTALITY_RISK_PARM, {
+  s->parameters.set(MORTALITY_RISK_PARM, {
       // Males
       0.00699,0.000447,0.000301,0.000233,
 	0.000177,0.000161,0.00015,0.000139,0.000123,0.000105,0.000091,0.000096,
@@ -87,23 +88,25 @@ void mortality_parm_init()
 }
 
 
-void sex_state_init(Agent &a)
+void sex_state_init(Simulation *s, Agent& a)
 {
   std::uniform_real_distribution<> dis;
-  if (dis(rng) < parameterMap.get(PROB_MALE_PARM))
+  if (dis(s->rng) < s->parameters.get(PROB_MALE_PARM))
     a.states.set(SEX_STATE, {MALE});
   else
     a.states.set(SEX_STATE, {FEMALE});
 }
 
-void dob_state_init(Agent &a)
+void dob_state_init(Simulation *s, Agent &a)
 {
   std::weibull_distribution<> dis(1, 20.0);
   a.states.set(DOB_STATE,
-	       {parameterMap.get(START_DATE_PARM) - std::min(100.0, dis(rng))});
+	       {s->parameters.get(START_DATE_PARM) - std::min(100.0,
+							      dis(s->rng))});
 }
 
-void alive_report(std::vector<Agent> & agents)
+void alive_report(Simulation *s,
+		  std::vector<Agent> & agents)
 {
   unsigned num_alive = 0, num_males_alive = 0, num_females_alive = 0;
   unsigned min_sex=0, max_sex=5000;
@@ -112,10 +115,10 @@ void alive_report(std::vector<Agent> & agents)
   real total_age = 0;
 
   std::cout << "Alive Report" << std::endl;
-  std::cout << "Date:\t" << stateMap[CURRENT_DATE_STATE].values[0] << std::endl;
+  std::cout << "Date:\t" << s->states[CURRENT_DATE_STATE].values[0] << std::endl;
   for (auto agent : agents) {
     if (agent.states[ALIVE_STATE].values[0] == 1.0) {
-      real age = stateMap[CURRENT_DATE_STATE].values[0] -
+      real age = s->states[CURRENT_DATE_STATE].values[0] -
 	agent.states[DOB_STATE].values[0];
       total_age += age;
       if (age > max_age) {
@@ -145,11 +148,12 @@ void alive_report(std::vector<Agent> & agents)
        << std::endl;
 }
 
-void mortality_report(std::vector<Agent> & agents)
+void mortality_report(Simulation *s,
+		      std::vector<Agent> & agents)
 {
   std::vector<real> ages, male_ages, female_ages;
   std::cout << "Mortality Report" << std::endl;
-  std::cout << "Date:\t" << stateMap.get(CURRENT_DATE_STATE) << std::endl;
+  std::cout << "Date:\t" << s->states.get(CURRENT_DATE_STATE) << std::endl;
   for (auto & agent : agents)
     if (agent.states.get(ALIVE_STATE) == 0.0) {
       ages.push_back(agent.states.get(DEATH_AGE_STATE));
@@ -183,99 +187,75 @@ void mortality_report(std::vector<Agent> & agents)
 
 }
 
-void simulate_agent(unsigned tid, std::vector<Agent> &agents, Agent &agent)
+void simulate_agent(unsigned tid,
+		    Simulation *s,
+		    std::vector<Agent> &agents,
+		    Agent &agent)
 {
   for (auto & event : agent.events)
-    event(agents, agent);
+    event(s, agents, agent);
 }
 
 int main(int argc, char *argv[])
 {
   Agent a;
-  std::vector<Agent> agents;
   GlobalEvents events;
   Reports reports;
   const unsigned num_agents = argc == 1 ? 100 : atoi(argv[1]);
-
+  Simulation s;
 
   // Init parameters
-  parameterMap[INTERIM_REPORT_PARM].values.push_back(0.0);
-  parameterMap[START_DATE_PARM].values.push_back(1980.0);
-  parameterMap[TIME_STEP_SIZE_PARM].values.push_back(1.0 / 365);
-  parameterMap[NUM_TIME_STEPS_PARM].values.
-    push_back(20.0 / parameterMap[TIME_STEP_SIZE_PARM].values[0]);
-  parameterMap[PROB_MALE_PARM].values.push_back(0.49);
+  s.parameters[INTERIM_REPORT_PARM].values.push_back(1.0);
+  s.parameters[START_DATE_PARM].values.push_back(1980.0);
+  s.parameters[TIME_STEP_SIZE_PARM].values.push_back(1.0 / 365);
+  s.parameters[NUM_TIME_STEPS_PARM].values.
+    push_back(20.0 / s.parameters[TIME_STEP_SIZE_PARM].values[0]);
+  s.parameters[PROB_MALE_PARM].values.push_back(0.49);
   // Risk number of days [0]
-  parameterMap[MORTALITY_RISK_PARM].values.push_back(1.0);
+  s.parameters[MORTALITY_RISK_PARM].values.push_back(1.0);
   // Set risk of dying at each age
-  mortality_parm_init();
+  mortality_parm_init(&s);
 
   // Init Global States
-  stateMap[CURRENT_DATE_STATE].
-    values.push_back(parameterMap[START_DATE_PARM].values[0]);
+  s.states[CURRENT_DATE_STATE].
+    values.push_back(s.parameters[START_DATE_PARM].values[0]);
 
   // Init Global Events
-  IncrementTime incrementTime(parameterMap[TIME_STEP_SIZE_PARM].values[0]);
-  events.push_back(incrementTime);
+  IncrementTime incrementTime(s.parameters[TIME_STEP_SIZE_PARM].values[0]);
+  s.events.push_back(incrementTime);
 
   // Init agents
   for (unsigned i = 0; i < num_agents; ++i) {
     Agent a;
-    sex_state_init(a);
-    dob_state_init(a);
+    sex_state_init(&s, a);
+    dob_state_init(&s, a);
     a.states[ALIVE_STATE].values.push_back(1.0);
     a.events.push_back(die_event);
-    agents.push_back(a);
+    s.agents.push_back(a);
   }
 
   // Init reports
-  std::pair<unsigned, std::function < void(std::vector<Agent> &)> > p;
-  p.first = 1000;
-  p.second = alive_report;
-  reports.push_back(p);
-  p.first = 2000;
-  p.second = mortality_report;
-  reports.push_back(p);
+  Report r;
+  r.first = 1000;
+  r.second = alive_report;
+  s.reports.push_back(r);
+  r.first = 2000;
+  r.second = mortality_report;
+  s.reports.push_back(r);
+
+  s.simulate();
 
 
-  // Reports at beginning
-
-  std::cout << "At beginning" << std::endl;
-  for (auto & report : reports) {
-    report.second(agents);
-    std::cout << "#####" << std::endl;
-  }
-  std::cout << "*****" << std::endl;
-
-  // Simulate
-
-  unsigned iterations = parameterMap[NUM_TIME_STEPS_PARM].values[0];
-  for (unsigned i = 0; i < iterations; ++i) {
-    for (const auto & event : events)
-      event();
-
-    for (auto & agent : agents)
-      for (auto & event : agent.events)
-	event(agents, agent);
-
-
-    // thread t[num_threads];
-    if (parameterMap[INTERIM_REPORT_PARM].values[0])
-      for (const auto & report : reports) {
-	if ( (i + 1) % report.first == 0)
-	  report.second(agents);
-      }
-    }
-  }
-
-  // Reports at end
-  std::cout << "*****" << std::endl;
-  std::cout << "At end" << std::endl;
-  for (auto & report : reports) {
-    report.second(agents);
-    std::cout << "#####" << std::endl;
-  }
-  std::cout << "*****" << std::endl;
-
+  std::cout << "START MONTECARLO" << std::endl;
+  Perturbers dists = {
+    {PROB_MALE_PARM, std::normal_distribution<>(0.1, 0.05) },
+    {MORTALITY_RISK_PARM, std::normal_distribution<>(0.0001, 0.0001) }
+  };
+  s.montecarlo(dists, [](const Simulation *simulation,
+			 unsigned iteration) {
+		 std::cout << "End of iteration: " << iteration << std::endl;
+		 return iteration < 10;
+	       });
+  std::cout << "END MONTECARLO" << std::endl;
   return 0;
 }
