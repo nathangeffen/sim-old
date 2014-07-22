@@ -12,36 +12,37 @@ private:
 public:
   IncrementTime(real time_step_size) : time_step_size_(time_step_size) {}
   void operator()(Simulation* s) {
-    s->states.get(CURRENT_DATE_STATE) += time_step_size_;
+    s->states[CURRENT_DATE_STATE][0] += time_step_size_;
   }
 };
 
 
-void die_event(Simulation *s, std::vector<Agent> & agents, Agent &agent)
+void die_event(Simulation *s, Agent *agent)
 {
-  if (agent.states.get(ALIVE_STATE) == DEAD)
+  if (agent->states[ALIVE_STATE][0] == DEAD)
     return;
 
   std::uniform_real_distribution<> dis;
 
-  real age_d = s->states.get(CURRENT_DATE_STATE) - agent.states.get(DOB_STATE);
+  real age_d = s->states[CURRENT_DATE_STATE][0] - agent->states[DOB_STATE][0];
 
   unsigned age = round(age_d);
 
-  unsigned parm_index = NUM_MORTALITY_PARMS * agent.states.get(SEX_STATE) + age;
+  unsigned parm_index = NUM_MORTALITY_PARMS * agent->states[SEX_STATE][0] + age;
 
-  real risk = pow((1.0 + s->parameters.get(MORTALITY_RISK_PARM, parm_index)),
-		   s->parameters.get(TIME_STEP_SIZE_PARM)) - 1.0;
+  real risk = pow((1.0 + s->parameters[MORTALITY_RISK_PARM][parm_index]),
+		  s->parameters[TIME_STEP_SIZE_PARM][0]) - 1.0;
 
   if (dis(s->rng) < risk) {
-    agent.states.get(ALIVE_STATE) = DEAD;
-    agent.states.set(DEATH_AGE_STATE, {age_d});
+    agent->states[ALIVE_STATE][0] = DEAD;
+    agent->states.set(DEATH_AGE_STATE, {age_d});
   }
 }
 
 
 void mortality_parm_init(Simulation *s)
 {
+
   // US life tables.
   // Source: http://www.ssa.gov/oact/STATS/table4c6.html
   // MALES
@@ -115,21 +116,21 @@ void alive_report(Simulation *s,
   real total_age = 0;
 
   std::cout << "Alive Report" << std::endl;
-  std::cout << "Date:\t" << s->states[CURRENT_DATE_STATE].values[0] << std::endl;
+  std::cout << "Date:\t" << s->states[CURRENT_DATE_STATE].get() << std::endl;
   for (auto agent : agents) {
-    if (agent.states[ALIVE_STATE].values[0] == 1.0) {
-      real age = s->states[CURRENT_DATE_STATE].values[0] -
-	agent.states[DOB_STATE].values[0];
+    if (agent.states[ALIVE_STATE].get() == 1.0) {
+      real age = s->states[CURRENT_DATE_STATE].get() -
+	agent.states[DOB_STATE].get();
       total_age += age;
       if (age > max_age) {
 	max_age = age;
-	max_sex = agent.states[SEX_STATE].values[0];
+	max_sex = agent.states[SEX_STATE].get();
       }
       if (age < min_age) {
 	min_age = age;
-	min_sex = agent.states[SEX_STATE].values[0];
+	min_sex = agent.states[SEX_STATE].get();
       }
-      if (agent.states[SEX_STATE].values[0] == MALE)
+      if (agent.states[SEX_STATE].get() == MALE)
 	++num_males_alive;
       else
 	++num_females_alive;
@@ -193,7 +194,7 @@ void simulate_agent(unsigned tid,
 		    Agent &agent)
 {
   for (auto & event : agent.events)
-    event(s, agents, agent);
+    event(s, &agent);
 }
 
 int main(int argc, char *argv[])
@@ -205,23 +206,22 @@ int main(int argc, char *argv[])
   Simulation s;
 
   // Init parameters
-  s.parameters[INTERIM_REPORT_PARM].values.push_back(1.0);
-  s.parameters[START_DATE_PARM].values.push_back(1980.0);
-  s.parameters[TIME_STEP_SIZE_PARM].values.push_back(1.0 / 365);
-  s.parameters[NUM_TIME_STEPS_PARM].values.
-    push_back(20.0 / s.parameters[TIME_STEP_SIZE_PARM].values[0]);
-  s.parameters[PROB_MALE_PARM].values.push_back(0.49);
+  s.parameters[INTERIM_REPORT_PARM].push_back(1.0);
+  s.parameters[START_DATE_PARM].push_back(1980.0);
+  s.parameters[TIME_STEP_SIZE_PARM].push_back(1.0 / 365);
+  s.parameters[NUM_TIME_STEPS_PARM].
+    push_back(20.0 / s.parameters[TIME_STEP_SIZE_PARM].get());
+  s.parameters[PROB_MALE_PARM].push_back(0.49);
   // Risk number of days [0]
-  s.parameters[MORTALITY_RISK_PARM].values.push_back(1.0);
+  s.parameters[MORTALITY_RISK_PARM].push_back(1.0);
   // Set risk of dying at each age
   mortality_parm_init(&s);
 
   // Init Global States
-  s.states[CURRENT_DATE_STATE].
-    values.push_back(s.parameters[START_DATE_PARM].values[0]);
+  s.states[CURRENT_DATE_STATE].push_back(s.parameters[START_DATE_PARM].get());
 
   // Init Global Events
-  IncrementTime incrementTime(s.parameters[TIME_STEP_SIZE_PARM].values[0]);
+  IncrementTime incrementTime(s.parameters[TIME_STEP_SIZE_PARM].get());
   s.events.push_back(incrementTime);
 
   // Init agents
@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
     Agent a;
     sex_state_init(&s, a);
     dob_state_init(&s, a);
-    a.states[ALIVE_STATE].values.push_back(1.0);
+    a.states[ALIVE_STATE].push_back(1.0);
     a.events.push_back(die_event);
     s.agents.push_back(a);
   }

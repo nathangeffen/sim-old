@@ -56,8 +56,7 @@ namespace sim {
   typedef std::function < void(Simulation *) > GlobalEvent;
   typedef std::list< GlobalEvent > GlobalEvents;
   typedef std::function < void(Simulation *,
-			       std::vector<Agent> &,
-			       Agent &) >  AgentEvent;
+			       Agent *) >  AgentEvent;
   typedef std::list< AgentEvent > AgentEvents;
   typedef std::pair < unsigned,
 		      std::function < void(Simulation *,
@@ -65,36 +64,41 @@ namespace sim {
   typedef std::list< Report > Reports;
 
   class Data {
-  public:
+  private:
     std::vector < real > values;
-    inline real get(const size_t n = 0) const { return values[n]; }
+  public:
+    inline real & get(const size_t n = 0) { return values[n]; }
+    inline real & operator[] (const size_t n) { return get(n); }
     inline void set(const size_t n, const real & val) { values[n] = val; }
     inline void set(const real & val) { set(0, val); }
     inline void set(const std::initializer_list<real> & list) {
       values = list;
     }
+    inline void push_back(const real & val) { values.push_back(val); }
+    friend class Simulation;
   };
 
   typedef Data Parameter;
   typedef Data State;
 
   class DataMap {
-  public:
+  private:
     std::unordered_map<unsigned, Data> dataMap;
+  public:
+    inline real & get(const unsigned & k, const size_t n = 0) {
+      return dataMap[k][n];
+    }
     inline Data& operator[] ( const unsigned& k ) { return dataMap[k]; };
     inline Data& operator[] ( unsigned&& k )  { return dataMap[k]; };
-    inline real & get(const unsigned & k, const size_t n = 0) {
-      return dataMap[k].values[n];
-    }
     inline void set(const unsigned & k, const size_t n, const real val) {
-      dataMap[k].values[n] = val;
+      dataMap[k][n] = val;
     }
     inline void set(const unsigned & k, const real val) {
       set(k, 0, val);
     }
     inline void set(const unsigned & k,
 		    const std::initializer_list<real> & list) {
-      dataMap[k].values = list;
+      dataMap[k].set(list);
     }
   };
 
