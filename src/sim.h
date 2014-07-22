@@ -10,7 +10,7 @@
 namespace sim {
   typedef double real;
 
-  enum parameters {
+  enum Parameters {
     INTERIM_REPORT_PARM = 0,
     START_DATE_PARM,
     MORTALITY_RISK_PARM,
@@ -19,23 +19,21 @@ namespace sim {
     PROB_MALE_PARM
   };
   const unsigned NUM_MORTALITY_PARMS = 120;
-
-  const unsigned CURRENT_DATE_STATE = 0;
-  const unsigned DOB_STATE = 1;
-  const unsigned ALIVE_STATE = 2;
-  const unsigned DEATH_AGE_STATE = 3;
-  const unsigned SEX_STATE = 4;
-
+  enum States {
+    CURRENT_DATE_STATE = 0,
+    DOB_STATE,
+    ALIVE_STATE,
+    DEATH_AGE_STATE,
+    SEX_STATE
+  };
   enum gender {
     MALE = 0,
     FEMALE = 1
   };
-
   enum live_status {
     DEAD = 0,
     ALIVE = 1
   };
-
   class Agent;
   class Simulation;
 
@@ -48,80 +46,37 @@ namespace sim {
   //   };
   // Where SOME_PARM_1 etc are parameter enumerations.
   // It is used for Monte Carlo simulation.
-
   typedef std::initializer_list <
     std::pair < std::vector<double>::size_type,
 		std::function<double(std::mt19937_64 &)>> > Perturbers;
-
   typedef std::function < void(Simulation *) > GlobalEvent;
   typedef std::list< GlobalEvent > GlobalEvents;
-  typedef std::function < void(Simulation *,
-			       Agent *) >  AgentEvent;
+  typedef std::function < void(Simulation *, Agent *) >  AgentEvent;
   typedef std::list< AgentEvent > AgentEvents;
-  typedef std::pair < unsigned,
-		      std::function < void(Simulation *,
-					   std::vector<Agent> &) > > Report;
+  typedef std::pair < unsigned, std::function < void(Simulation *) > > Report;
   typedef std::list< Report > Reports;
-
-  class Data {
-  private:
-    std::vector < real > values;
-  public:
-    inline real & get(const size_t n = 0) { return values[n]; }
-    inline real & operator[] (const size_t n) { return get(n); }
-    inline void set(const size_t n, const real & val) { values[n] = val; }
-    inline void set(const real & val) { set(0, val); }
-    inline void set(const std::initializer_list<real> & list) {
-      values = list;
-    }
-    inline void push_back(const real & val) { values.push_back(val); }
-    friend class Simulation;
-  };
-
-  typedef Data Parameter;
-  typedef Data State;
-
-  class DataMap {
-  private:
-    std::unordered_map<unsigned, Data> dataMap;
-  public:
-    inline real & get(const unsigned & k, const size_t n = 0) {
-      return dataMap[k][n];
-    }
-    inline Data& operator[] ( const unsigned& k ) { return dataMap[k]; };
-    inline Data& operator[] ( unsigned&& k )  { return dataMap[k]; };
-    inline void set(const unsigned & k, const size_t n, const real val) {
-      dataMap[k][n] = val;
-    }
-    inline void set(const unsigned & k, const real val) {
-      set(k, 0, val);
-    }
-    inline void set(const unsigned & k,
-		    const std::initializer_list<real> & list) {
-      dataMap[k].set(list);
-    }
-  };
-
-  typedef DataMap ParameterMap;
-  typedef DataMap StateMap;
+  typedef std::unordered_map<unsigned, std::vector< real > > ParameterMap;
+  typedef std::unordered_map<unsigned, std::vector< real > > StateMap;
 
   class Agent {
   public:
-    DataMap states;
+    StateMap states;
     AgentEvents events;
   };
 
   class Simulation {
-  private:
+  protected:
     ParameterMap savedParameters_;
     void perturb_parameters(const Perturbers& peturbers);
   public:
+    ~Simulation();
     std::mt19937_64 rng;
     ParameterMap parameters;
     StateMap states;
     GlobalEvents events;
     Reports reports;
-    std::vector<Agent> agents;
+    std::vector<Agent *> agents;
+    virtual Agent* append_agent();
     virtual void simulate();
     void montecarlo(const Perturbers& peturbers,
 		    std::function<bool(const Simulation *,
