@@ -1,7 +1,7 @@
 ## configure.ac
 
 AC_INIT([libsim], [0.1], [nathangeffen@quackdown.info], [sim],
-	[https://github.com/nathangeffen/libsim])
+	[https://github.com/nathangeffen/sim])
 AC_PREREQ([2.69])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([1.10 subdir-objects -Wall no-define])

@@ -54,6 +54,6 @@ pkgconfig_DATA = sim-$(SIM_API_VERSION).pc
 
 ## dist_noinst_SCRIPTS = autogen.sh
 
-EXTRA_DIST = autogen.sh
+#EXTRA_DIST = autogen.sh
 
 dist_doc_data = README
