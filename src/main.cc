@@ -2,7 +2,7 @@
 #include <iostream>
 #include <random>
 
-#include "sim.h"
+#include "sim.hh"
 
 using namespace sim;
 
@@ -184,18 +184,8 @@ void mortality_report(Simulation *s)
   }
 }
 
-void simulate_agent(unsigned tid,
-		    Simulation *s,
-		    std::vector<Agent> &agents,
-		    Agent &agent)
+int old_main(int argc, char *argv[])
 {
-  for (auto & event : agent.events)
-    event(s, &agent);
-}
-
-int main(int argc, char *argv[])
-{
-  Agent a;
   GlobalEvents events;
   Reports reports;
   const unsigned num_agents = argc == 1 ? 100 : atoi(argv[1]);
@@ -253,4 +243,9 @@ int main(int argc, char *argv[])
 	       });
   std::cout << "END MONTECARLO" << std::endl;
   return 0;
+}
+
+int main(int argc, char *argv[])
+{
+
 }
