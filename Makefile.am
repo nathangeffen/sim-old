@@ -10,7 +10,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = -std=c++11
 lib_LTLIBRARIES = libsim-@SIM_API_VERSION@.la
-libsim_@SIM_API_VERSION@_la_SOURCES = sim/Simulation.cc
+libsim_@SIM_API_VERSION@_la_SOURCES = sim/Simulation.cc sim/Simulation.hh sim/sim.hh
 bin_PROGRAMS = testsim
 testsim_SOURCES = src/testsim.cc src/test.cc src/test.hh
 testsim_LDADD = libsim-@SIM_API_VERSION@.la

@@ -4,7 +4,7 @@ AC_INIT([libsim], [0.1], [nathangeffen@quackdown.info], [sim],
 	[https://github.com/nathangeffen/libsim])
 AC_PREREQ([2.69])
 AC_CONFIG_AUX_DIR([build-aux])
-AM_INIT_AUTOMAKE([1.10 -Wall no-define])
+AM_INIT_AUTOMAKE([1.10 subdir-objects -Wall no-define])
 AC_CONFIG_MACRO_DIR([m4])
 
 # Generate two configuration headers; one for building the library itself with
@@ -14,6 +14,11 @@ AC_CONFIG_HEADERS([config.h])
 AM_PROG_AR
 AC_PROG_CXX
 LT_INIT([disable-static])
+AC_CHECK_FUNCS([strerror])
+AC_CHECK_FUNCS([strtol])
+AC_CHECK_HEADER_STDBOOL
+AC_C_INLINE
+AC_TYPE_SIZE_T
 
 # Define these substitions here to keep all version information in one place.
 # For information on how to properly maintain the library version information,
