@@ -8,7 +8,7 @@
 #include <string>
 #include <unistd.h>
 
-#include "sim.hh"
+#include "sim/sim.hh"
 #include "test.hh"
 
 using namespace sim;
