@@ -1,14 +1,49 @@
 #include <algorithm>
 #include <iostream>
+#include <cstring>
 
-#include "sim.hh"
+#include "Simulation.hh"
 
 using namespace sim;
+
+namespace sim {
+  unsigned thread_num  = 0;
+  thread_local std::mt19937_64 rng;
+}
+
+Simulation::
+#ifdef SIM_VECTORIZE
+Simulation(unsigned seed,
+	   size_t num_parms,
+	   size_t num_states)
+#else
+Simulation(unsigned seed)
+#endif
+: seed_(seed + sim::thread_num)
+{
+#ifdef SIM_VECTORIZE
+  num_parms_ = num_parms;
+  parameters.resize(num_parms_);
+  num_states_ = num_states;
+  states.resize(num_states_);
+#else
+#endif
+}
+
+Simulation::~Simulation()
+{
+  for (auto & agent : agents)
+    delete agent;
+}
+
 
 Agent*
 Simulation::append_agent()
 {
   Agent *a = new Agent(agent_count_++);
+#ifdef SIM_VECTORIZE
+  a->states.resize(num_states_);
+#endif
   agents.push_back(a);
   return a;
 }
@@ -20,14 +55,78 @@ Simulation::set_number_agents(const unsigned num_agents)
     append_agent();
 }
 
+unsigned
+Simulation::iteration() const
+{
+  return iteration_;
+}
+
 
 void
-Simulation::kill_agent(Agent *a)
+Simulation::set_parameter(unsigned parameter,
+			  const std::initializer_list<real> values)
 {
-  dead_agents.push_back(a);
-  a = agents.back();
+  parameters[parameter] = values;
+}
+
+void
+Simulation::set_parameters(const std::initializer_list<
+			   std::pair< unsigned,
+			   const std::initializer_list<real> > > parms) {
+  for (auto & p : parms)
+    set_parameter(p.first, p.second);
+}
+
+void
+Simulation::set_global_state_initializers(const std::initializer_list
+					  <GlobalStateInit>  init_funcs)
+{
+  init_global_state_funcs_ = init_funcs;
+}
+
+
+void
+Simulation::set_global_states()
+{
+  for (auto & f : init_global_state_funcs_)
+    f(this);
+}
+
+void
+Simulation::set_global_states(const std::initializer_list<GlobalStateInit>
+			      init_funcs)
+{
+  set_global_state_initializers(init_funcs);
+  set_global_states();
+}
+
+void
+Simulation::set_agent_initializers(const std::initializer_list <AgentInit>
+				   init_funcs)
+{
+  init_agent_funcs_ = init_funcs;
+}
+
+void
+Simulation::set_global_events(const std::initializer_list<GlobalEvent> evnts) {
+  events = evnts;
+}
+
+
+void
+Simulation::kill_agent(size_t agent_index)
+{
+  dead_agents.push_back(agents[agent_index]);
+  agents[agent_index] = agents.back();
   agents.pop_back();
 }
+
+void
+Simulation::kill_agent()
+{
+  kill_agent(current_agent_index_);
+}
+
 
 void
 Simulation::set_agent_states()
@@ -54,6 +153,40 @@ Simulation::set_events(const std::initializer_list<AgentEvent> events)
     agent->events = events;
 }
 
+void
+Simulation::set_reports(const std::initializer_list <report_parms_> reprts)
+{
+  for (auto & r : reprts)
+    reports.push_back(Report(r.report_func, r.iteration, r.before, r.after));
+}
+
+
+
+void
+Simulation::initialize(const std::initializer_list <AgentInit> &init_funcs,
+		       const std::initializer_list<AgentEvent> events) {
+  set_agent_states(init_funcs);
+  set_events(events);
+}
+
+void
+Simulation::initialize(const unsigned num_agents,
+		       const std::initializer_list <AgentInit> &init_funcs,
+		       const std::initializer_list<AgentEvent> events) {
+  set_number_agents(num_agents);
+  initialize(init_funcs, events);
+}
+
+void
+Simulation::initialize(const std::initializer_list< std::pair<
+		       unsigned, const std::initializer_list<real> > > parms,
+		       const unsigned num_agents,
+		       const std::initializer_list <AgentInit> init_funcs,
+		       const std::initializer_list<AgentEvent> events) {
+  set_parameters(parms);
+  initialize(num_agents, init_funcs, events);
+}
+
 
 void
 Simulation::initialize(std::initializer_list< std::pair<
@@ -70,6 +203,7 @@ Simulation::initialize(std::initializer_list< std::pair<
   initialize(parameters, num_agents, agent_init_funcs, agent_events);
   set_global_states(global_state_init_funcs);
   set_global_events(global_events);
+  set_reports(reports);
 }
 
 void
@@ -90,6 +224,10 @@ Simulation::montecarlo(const unsigned num_steps,
 		       std::function<bool(const Simulation *,
 					  unsigned)> carryon)
 {
+  try {
+#ifdef SIM_VECTORIZE
+  savedParameters_.resize(num_parms_);
+#endif
   // Save parameters
   for (auto & perturber : perturbers)
     std::copy(parameters[perturber.first].begin(),
@@ -107,12 +245,16 @@ Simulation::montecarlo(const unsigned num_steps,
     std::copy(savedParameters_[perturber.first].begin(),
 	      savedParameters_[perturber.first].end(),
 	      parameters[perturber.first].begin());
+  } catch(std::exception &e) {
+    throw SimulationException(e.what());
+  }
 }
 
 void
 Simulation::simulate(unsigned num_steps,
 		     bool interim_reports)
 {
+  try {
   // Reports at beginning
   for (auto & report : reports)
     if (report.before())
@@ -124,9 +266,12 @@ Simulation::simulate(unsigned num_steps,
     for (const auto & event : events)
       event(this);
     std::shuffle(agents.begin(), agents.end(), rng);
-    for (auto & agent : agents)
+    current_agent_index_ = 0;
+    for (auto & agent : agents) {
       for (auto & event : agent->events)
 	event(this, agent);
+      ++current_agent_index_;
+    }
     if (parameters[INTERIM_REPORT_PARM][0]) {
       for (auto & report : reports) {
 	unsigned freq = report.frequency();
@@ -139,10 +284,7 @@ Simulation::simulate(unsigned num_steps,
   for (auto & report : reports)
     if (report.after())
       report(this);
-}
-
-Simulation::~Simulation()
-{
-  for (auto & agent : agents)
-    delete agent;
+  } catch (std::exception &e) {
+    throw SimulationException(e.what());
+  }
 }

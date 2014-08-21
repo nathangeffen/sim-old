@@ -28,7 +28,7 @@ enum UserParameters {
 };
 
 enum UserStates {
-  POSITION_STATE = LAST_STATE + 1
+  POSITION_STATE = LAST_STATE + 1,
 };
 
 tst::TestSeries t("Sim");
@@ -59,6 +59,35 @@ public:
   }
 };
 
+class DeathEvent {
+private:
+  double max_age(const double start, const std::vector<Agent *> &agents)
+  {
+    double m = 0;
+    for (auto &a: agents) {
+      double age = start - a->states[DOB_STATE][0];
+      if (age > m)
+	m = age;
+    }
+    return m;
+  }
+public:
+  void operator()(Simulation* s, Agent *agent)
+  {
+    static double cutoff = max_age(s->states[CURRENT_DATE_STATE][0],
+				    s->agents) * 2;
+    double age;
+
+    if (agent->states[ALIVE_STATE][0])
+      age = s->states[CURRENT_DATE_STATE][0] - agent->states[DOB_STATE][0];
+    if (age > cutoff) {
+      agent->states[ALIVE_STATE][0] = 0;
+      agent->states[DEATH_AGE_STATE][0] = s->states[CURRENT_DATE_STATE][0];
+      s->kill_agent();
+    }
+  }
+};
+
 
 /* REPORTS */
 
@@ -83,7 +112,7 @@ void age_report(const Simulation *s)
     if (agent->states[DOB_STATE][0] > max_date)
       max_date = agent->states[DOB_STATE][0];
   }
-  TESTEQ(t, min_date, start_date - 9.0, "minimum date");
+  TESTEQ(t, min_date, start_date - s->agents.size() + 1, "minimum date");
   TESTEQ(t, max_date, start_date, "maximum date");
 }
 
@@ -121,6 +150,34 @@ public:
   }
 };
 
+class MortalityReport {
+  tst::TestSeries &t_;
+  unsigned tot_agents_;
+public:
+  MortalityReport(tst::TestSeries &t,
+		  size_t tot_agents) :
+    t_(t), tot_agents_(tot_agents) { }
+  void operator()(const Simulation *s)
+  {
+    size_t num_alive = std::count_if(s->agents.begin(), s->agents.end(),
+				     [&num_alive](const Agent *agent){
+				       return agent->states.at(ALIVE_STATE)[0];
+				     });
+    TESTLT(t_, 0, num_alive,  "Number alive > 0.");
+    TESTEQ(t_, num_alive, s->agents.size(), "Number alive.");
+    size_t num_dead = std::count_if(s->dead_agents.begin(), s->dead_agents.end(),
+				    [&num_alive](const Agent *agent){
+				      if (agent->states.at(ALIVE_STATE)[0])
+					return false;
+				      else
+					return true;
+				    });
+    num_dead = s->dead_agents.size();
+    TESTLT(t_, 0, num_dead, "Number dead > 0.");
+    TESTEQ(t_, num_dead + num_alive, tot_agents_, "Dead + alive == total agents.");
+  }
+};
+
 /* STATE INITIATION */
 
 void position_state_init(Agent* a, Simulation* s)
@@ -137,7 +194,7 @@ void sex_state_init(Agent* a, Simulation* s)
 {
   // This is an improper deterministic implementation, necessary for testing
   std::uniform_real_distribution<> dis;
-  if (dis(s->rng) < s->parameters[PROB_MALE_PARM][0]) {
+  if (dis(sim::rng) < s->parameters[PROB_MALE_PARM][0]) {
     a->states[SEX_STATE] = {MALE};
     s->parameters[PROB_MALE_PARM][0] = 0.0;
   }  else {
@@ -153,6 +210,12 @@ void dob_state_init(Agent *a, Simulation *s)
   static int start = 0;
   a->states[DOB_STATE] = {s->parameters[START_DATE_PARM][0] + start};
   --start;
+}
+
+void alive_state_init(Agent *a, Simulation *s)
+{
+  a->states[ALIVE_STATE] = {1};
+  a->states[DEATH_AGE_STATE] = {0.0};
 }
 
 void test_simple_simulation(tst::TestSeries &tst,
@@ -177,13 +240,15 @@ void test_simple_simulation(tst::TestSeries &tst,
     // Number of agents
     num_agents,
     // Agent state initiation functions
-    {sex_state_init, dob_state_init, position_state_init},
+    {sex_state_init, dob_state_init, alive_state_init, position_state_init},
     // Agent events
-    {UpdatePositionEvent()},
+    {UpdatePositionEvent(), DeathEvent()},
     // Reports
     {{age_report, 1000, false, false},
-	{gender_report, 0, true, true},
-	  {PositionReport(tst), 0, true, true}});
+	{gender_report, 0, true, false},
+	  {MortalityReport(tst, num_agents), 0, false, true},
+	    {PositionReport(tst), 0, true, true}
+	   });
 
   TESTEQ(tst, s.states[CURRENT_DATE_STATE][0], 1980.0,
 	 "Initial date set");
@@ -252,7 +317,8 @@ void test_monte_carlo(tst::TestSeries &tst,
   s.set_events({UpdatePositionEvent()});
 
   // Set reports
-  s.set_reports({ {PositionReport(tst), 0, true, true} });
+  s.set_reports({
+      {PositionReport(tst), 0, true, true} });
 
   t = clock();
   total_time = clock();

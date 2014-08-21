@@ -11,6 +11,7 @@ ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = -std=c++11
 lib_LTLIBRARIES = libsim-@SIM_API_VERSION@.la
 libsim_@SIM_API_VERSION@_la_SOURCES = sim/Simulation.cc sim/Simulation.hh sim/sim.hh
+	sim/common.hh
 bin_PROGRAMS = testsim
 testsim_SOURCES = src/testsim.cc src/test.cc src/test.hh
 testsim_LDADD = libsim-@SIM_API_VERSION@.la
@@ -24,7 +25,8 @@ libsim_@SIM_API_VERSION@_la_LDFLAGS = -version-info $(SIM_SO_VERSION)
 sim_includedir = $(includedir)/sim-$(SIM_API_VERSION)
 
 nobase_sim_include_HEADERS = 	sim/sim.hh \
-				sim/Simulation.hh
+				sim/Simulation.hh \
+				sim/common.hh
 
 ## The generated configuration header is installed in its own subdirectory of
 ## $(libdir).  The reason for this is that the configuration information put
