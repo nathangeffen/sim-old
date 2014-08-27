@@ -73,7 +73,7 @@ namespace sim {
   private:
     std::string msg_ = "Simulation exception";
   public:
-    SimulationException(const char *s) { msg_ += ": "; msg_ += s; }
+    SimulationException(const char *s) { msg_ = s; }
     SimulationException() {}
     virtual const char* what() const throw() { return msg_.c_str(); }
   };

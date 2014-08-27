@@ -12,9 +12,11 @@ AM_CXXFLAGS = -std=c++11
 lib_LTLIBRARIES = libsim-@SIM_API_VERSION@.la
 libsim_@SIM_API_VERSION@_la_SOURCES = sim/Simulation.cc sim/Simulation.hh sim/sim.hh
 	sim/common.hh
-bin_PROGRAMS = testsim
+bin_PROGRAMS = testsim simplesim
 testsim_SOURCES = src/testsim.cc src/test.cc src/test.hh
 testsim_LDADD = libsim-@SIM_API_VERSION@.la
+simplesim_SOURCES = src/simplesim.cc src/test.cc src/test.hh
+simplesim_LDADD = libsim-@SIM_API_VERSION@.la
 
 ## Instruct libtool to include ABI version information in the generated shared
 ## library file (.so).  The library ABI version is defined in configure.ac, so

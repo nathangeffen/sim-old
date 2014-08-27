@@ -236,8 +236,7 @@ Simulation::montecarlo(const unsigned num_steps,
   // Run the simulations
   for (int i = 0; carryon(this, i); ++i) {
     perturb_parameters(perturbers);
-    set_global_states();
-    set_agent_states();
+    initialize_states();
     simulate(num_steps, interim_reports);
   }
   // Restore the parameters
@@ -251,6 +250,13 @@ Simulation::montecarlo(const unsigned num_steps,
 }
 
 void
+Simulation::initialize_states()
+{
+  set_global_states();
+  set_agent_states();
+}
+
+void
 Simulation::simulate(unsigned num_steps,
 		     bool interim_reports)
 {
@@ -258,33 +264,123 @@ Simulation::simulate(unsigned num_steps,
   // Reports at beginning
   for (auto & report : reports)
     if (report.before())
-      report(this);
+      try {
+	report(this);
+      } catch (std::exception &e) {
+	  std::cerr << "Exception processing pre-simulation report "
+		    << __FILE__ << " " << __LINE__ << std::endl;
+	  std::cerr << "Report address: " << &report << std::endl;
+	  throw SimulationException(e.what());
+      }
   // Simulate
   unsigned iterations = num_steps;
   for (; iteration_ < iterations; ++iteration_) {
     // Global events
     for (const auto & event : events)
-      event(this);
+      try {
+	event(this);
+      } catch (std::exception &e) {
+	std::cerr << "Exception processing global event "
+		  << __FILE__ << " " << __LINE__ << std::endl;
+	std::cerr << "Iteration: " << iteration_ << std::endl;
+	std::cerr << "Event address: " << &event << std::endl;
+	throw SimulationException(e.what());
+      }
     std::shuffle(agents.begin(), agents.end(), rng);
     current_agent_index_ = 0;
     for (auto & agent : agents) {
-      for (auto & event : agent->events)
-	event(this, agent);
-      ++current_agent_index_;
+	for (auto & event : agent->events)
+	  try {
+	    event(this, agent);
+	  } catch  (std::exception &e) {
+	    std::cerr << "Exception processing agent event "
+		      << __FILE__ << " " << __LINE__ << std::endl;
+	    std::cerr << "Iteration: " << iteration_ << std::endl;
+	    std::cerr << "Agent id: " << agent->id() << std::endl;
+	    std::cerr << "Agent index: " << current_agent_index_ << std::endl;
+	    std::cerr << "Event address: " << &event << std::endl;
+	    throw SimulationException(e.what());
+	  }
+	++current_agent_index_;
     }
-    if (parameters[INTERIM_REPORT_PARM][0]) {
+    if (interim_reports) {
       for (auto & report : reports) {
-	unsigned freq = report.frequency();
-	if ( freq && ( (iteration_ + 1) % freq == 0 ))
-	  report(this);
+	try {
+	  unsigned freq = report.frequency();
+	  if ( freq && ( (iteration_ + 1) % freq == 0 ))
+	    report(this);
+	} catch (std::exception &e) {
+	  std::cerr << "Exception processing end of simulation report "
+		    << __FILE__ << " " << __LINE__ << std::endl;
+	  std::cerr << "Iteration: " << iteration_ << std::endl;
+	  std::cerr << "Report address: " << &report << std::endl;
+	  throw SimulationException(e.what());
+	}
       }
     }
   }
   // Reports at end
   for (auto & report : reports)
     if (report.after())
-      report(this);
+      try {
+	report(this);
+      } catch (std::exception &e) {
+	  std::cerr << "Exception processing final report "
+		    << __FILE__ << " " << __LINE__ << std::endl;
+	  std::cerr << "Report address: " << &report << std::endl;
+	  throw SimulationException(e.what());
+      }
   } catch (std::exception &e) {
+    std::cerr << "Exception at " << __FILE__ << " " << __LINE__ << std::endl;
     throw SimulationException(e.what());
   }
+}
+
+/* If an event occurs with probability P1 in time T1,
+   then the probability, P2, of it occuring in time T2 is:
+   P2 = 1 - (1 - P1)^(T1/T2).
+   This function returns P2
+*/
+
+real
+Simulation::prob_event(real P1,
+		       real T1,
+		       real T2) const
+{
+  return 1 - pow((1 - P1), (T1 / T2));
+}
+
+bool
+Simulation::is_event(real rand,
+		     real P1,
+		     real T1,
+		     real T2) const
+{
+  if (rand < prob_event(P1, T1, T2))
+    return true;
+  else
+    return false;
+}
+
+bool
+Simulation::is_event(real P1,
+		     real T1,
+		     real T2) const
+{
+  std::uniform_real_distribution<> uni_dis;
+  return is_event(uni_dis(rng), P1, T1, T2);
+}
+
+
+bool
+Simulation::is_event(real P1) const
+{
+  return is_event(P1, 1.0, parameters.at(TIME_STEP_SIZE_PARM)[0]);
+}
+
+bool
+Simulation::is_event(unsigned parameter) const
+{
+  return is_event(parameters.at(parameter)[0], 1.0,
+		  parameters.at(TIME_STEP_SIZE_PARM)[0]);
 }

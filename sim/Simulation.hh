@@ -86,12 +86,19 @@ namespace sim {
 		    const std::initializer_list <AgentInit> agent_init_funcs,
 		    const std::initializer_list<AgentEvent> agent_events,
 		    const std::initializer_list <report_parms_> reports);
+    void initialize_states();
     virtual void simulate(const unsigned num_steps,
 			  const bool interim_reports);
     void montecarlo(const unsigned num_steps,
 		    const bool interim_reports,
 		    const Perturbers& peturbers,
 		    std::function<bool(const Simulation *, unsigned)> carryon);
+    // Helper functions
+    real prob_event(real P1, real T1, real T2) const;
+    bool is_event(real rand, real P1, real T1, real T2) const;
+    bool is_event(real P1, real T1, real T2) const;
+    bool is_event(real P1) const;
+    bool is_event(unsigned parameter) const;
   };
 }
 #endif
