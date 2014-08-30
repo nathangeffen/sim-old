@@ -78,12 +78,13 @@ public:
 				    s->agents) * 2;
     double age;
 
-    if (agent->states[ALIVE_STATE][0])
+    if (agent->states[ALIVE_STATE][0]) {
       age = s->states[CURRENT_DATE_STATE][0] - agent->states[DOB_STATE][0];
-    if (age > cutoff) {
-      agent->states[ALIVE_STATE][0] = 0;
-      agent->states[DEATH_AGE_STATE][0] = s->states[CURRENT_DATE_STATE][0];
-      s->kill_agent();
+      if (age > cutoff) {
+	agent->states[ALIVE_STATE][0] = 0;
+	agent->states[DEATH_AGE_STATE][0] = s->states[CURRENT_DATE_STATE][0];
+	s->kill_agent();
+      }
     }
   }
 };
@@ -527,7 +528,7 @@ int main(int argc, char *argv[])
   unsigned num_mc_simulations = 8;
   bool verbose = false;
   int opt;
-  std::string csv_filename = "testsim.csv";
+  std::string csv_filename = "data/testsim.csv";
 
   try {
     while ((opt = getopt(argc, argv, "a:s:m:c:vh")) != -1) {
