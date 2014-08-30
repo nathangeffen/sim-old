@@ -38,3 +38,4 @@ src/output.txt
 src/sim.h
 build-aux/
 configure.scan
+simplesim

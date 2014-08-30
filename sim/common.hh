@@ -4,6 +4,7 @@
 #include <functional>
 #include <list>
 #include <random>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include <tuple>
@@ -104,7 +105,6 @@ namespace sim {
     Agent(unsigned long id) : id_(id) {}
     inline unsigned id() const { return id_; }
     StateMap states;
-    AgentEvents events;
   };
   extern unsigned thread_num;
   extern thread_local std::mt19937_64 rng;

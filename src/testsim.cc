@@ -119,7 +119,7 @@ void age_report(const Simulation *s)
 void gender_report(const Simulation *s)
 {
   size_t num_males = std::count_if(s->agents.begin(), s->agents.end(),
-				   [&num_males](const Agent *agent){
+				   [](const Agent *agent){
 				     return agent->states.at(SEX_STATE)[0]
 				     == MALE;
 				   });
@@ -160,13 +160,13 @@ public:
   void operator()(const Simulation *s)
   {
     size_t num_alive = std::count_if(s->agents.begin(), s->agents.end(),
-				     [&num_alive](const Agent *agent){
+				     [](const Agent *agent){
 				       return agent->states.at(ALIVE_STATE)[0];
 				     });
     TESTLT(t_, 0, num_alive,  "Number alive > 0.");
     TESTEQ(t_, num_alive, s->agents.size(), "Number alive.");
     size_t num_dead = std::count_if(s->dead_agents.begin(), s->dead_agents.end(),
-				    [&num_alive](const Agent *agent){
+				    [](const Agent *agent){
 				      if (agent->states.at(ALIVE_STATE)[0])
 					return false;
 				      else
@@ -224,31 +224,46 @@ void test_simple_simulation(tst::TestSeries &tst,
 {
   Simulation s;
   clock_t t;
-  s.initialize({
-      // Parameters
-      {INTERIM_REPORT_PARM, {1.0}},
-	{START_DATE_PARM, {1980.0}},
-	  {TIME_STEP_SIZE_PARM, {1.0 / 365}},
-	    {NUM_TIME_STEPS_PARM, {20.0 / (1.0 / 365)}},
-	      {POSITION_INIT_PARM, {0.0, 0.0}},
-		{POSITION_UPDATE_PARM, {1.0, 2.0}},
-		  {PROB_MALE_PARM, {1.0}}},
-    // Global state initiation functions
-    {[](Simulation *s) {
-	s->states[CURRENT_DATE_STATE] = {s->parameters[START_DATE_PARM][0]};}},
-    {IncrementTimeEvent(1.0 / 365)},
-    // Number of agents
-    num_agents,
-    // Agent state initiation functions
-    {sex_state_init, dob_state_init, alive_state_init, position_state_init},
-    // Agent events
-    {UpdatePositionEvent(), DeathEvent()},
-    // Reports
-    {{age_report, 1000, false, false},
+
+  // Parameters
+  s.set_parameters({
+      {INTERIM_REPORT_PARM, {1.0}, "interim report"},
+	{START_DATE_PARM, {1980.0}, "start date"},
+	  {TIME_STEP_SIZE_PARM, {1.0 / 365}, "time step size"},
+	    {NUM_TIME_STEPS_PARM, {20.0 / (1.0 / 365)}, "num time steps"},
+	      {POSITION_INIT_PARM, {0.0, 0.0}, "position init"},
+		{POSITION_UPDATE_PARM, {1.0, 2.0}, "position update"},
+		  {PROB_MALE_PARM, {1.0}, "prob male"}
+    });
+
+  // Global state initiation functions
+  s.set_global_states({
+      [](Simulation *s) {
+	s->states[CURRENT_DATE_STATE] = {s->parameters[START_DATE_PARM][0]};
+      }});
+
+
+  // Global events
+  s.set_global_events({
+      IncrementTimeEvent(s.parameters[TIME_STEP_SIZE_PARM][0])});
+
+  // Number of agents
+  s.set_number_agents(num_agents);
+
+  // Set state names
+  s.set_state_names({ {SEX_STATE, "sex"}, {DOB_STATE, "dob"} });
+
+  // Agent initiation functions
+  s.set_agent_initializers({sex_state_init, dob_state_init,
+	alive_state_init, position_state_init});
+
+  // Agent events
+  s.set_events({UpdatePositionEvent(), DeathEvent()});
+
+  s.set_reports({{age_report, 1000, false, false},
 	{gender_report, 0, true, false},
 	  {MortalityReport(tst, num_agents), 0, false, true},
-	    {PositionReport(tst), 0, true, true}
-	   });
+	    {PositionReport(tst), 0, true, true}});
 
   TESTEQ(tst, s.states[CURRENT_DATE_STATE][0], 1980.0,
 	 "Initial date set");
@@ -271,6 +286,105 @@ void test_simple_simulation(tst::TestSeries &tst,
     std::clog << "Time for simple simulation: " << (float) t / CLOCKS_PER_SEC
 	      << std::endl;
   }
+}
+
+void test_csv_simulation(tst::TestSeries &tst,
+			 const char *filename,
+			 const bool verbose)
+{
+  Simulation s;
+
+ // Parameters
+  s.set_parameters({
+      {INTERIM_REPORT_PARM, {1.0}, "interim report"},
+	{START_DATE_PARM, {1980.0}, "start date"},
+	  {TIME_STEP_SIZE_PARM, {1.0 / 365.0}, "time step size"},
+	    {NUM_TIME_STEPS_PARM, {10}, "num time steps"},
+	      {POSITION_INIT_PARM, {0.0, 0.0}, "position init"},
+		{POSITION_UPDATE_PARM, {1.0, 2.0}, "position update"},
+		  {PROB_MALE_PARM, {1.0}, "prob male"}
+    });
+
+  // Global state initiation functions
+  s.set_global_states({
+      [](Simulation *s) {
+	s->states[CURRENT_DATE_STATE] = {s->parameters[START_DATE_PARM][0]};
+      }});
+
+
+  // Global events
+  s.set_global_events({
+      IncrementTimeEvent(s.parameters[TIME_STEP_SIZE_PARM][0])});
+
+  // Set state names
+  s.set_state_names({ {SEX_STATE, "sex"}, {DOB_STATE, "dob"} });
+
+  // Set CSV file initializer
+  s.set_agent_csv_initializer(filename);
+
+  s.simulate(s.parameters[NUM_TIME_STEPS_PARM][0],
+	     s.parameters[INTERIM_REPORT_PARM][0]);
+
+  TESTEQ(tst, s.agents.size(), 86880, "number of csv created agents");
+  size_t num_1975_females = std::count_if(s.agents.begin(), s.agents.end(),
+					  [](const Agent *agent)
+					  {
+					    return
+					    agent->states.at(SEX_STATE)[0]
+					    == FEMALE &&
+					    agent->states.at(DOB_STATE)[0]
+					    == 1975;
+					  });
+  TESTEQ(tst, num_1975_females, 3915, "number of 1975 female created agents");
+}
+
+void test_norm_functions(tst::TestSeries &tst)
+{
+  Simulation s;
+
+   // Parameters
+  s.set_parameters({
+	  {TIME_STEP_SIZE_PARM, {1.0}, "time step size"},
+	      {PROB_MALE_PARM, {0.5}}});
+  TESTLT(tst, s.prob_event(PROB_MALE_PARM) - 0.5, 0.0001,
+	 "Probability of event: ts = 1.0, prob=0.5");
+  s.parameters[TIME_STEP_SIZE_PARM][0] = 0.5;
+  TESTLT(tst, s.prob_event(PROB_MALE_PARM) - 0.292893, 0.0001,
+	 "Probability of event: ts = 0.5, prob=0.5");
+  s.parameters[PROB_MALE_PARM][0] = 0.2;
+  TESTLT(tst, s.prob_event(PROB_MALE_PARM) - 0.105573, 0.0001,
+	 "Probability of event: ts = 0.5, prob=0.2");
+
+  s.parameters[TIME_STEP_SIZE_PARM][0] = 0.1;
+  TESTLT(tst, s.prob_event(PROB_MALE_PARM) - 0.0220672, 0.0001,
+	 "Probability of event: ts = 0.5, prob=0.1");
+  s.parameters[TIME_STEP_SIZE_PARM][0] = 0.4;
+  s.parameters[PROB_MALE_PARM][0] = 0.9;
+  TESTLT(tst, s.prob_event(PROB_MALE_PARM) - 0.601893, 0.0001,
+	 "Probability of event: ts = 0.4, prob=0.9");
+  s.parameters[TIME_STEP_SIZE_PARM][0] = 0.5;
+  s.parameters[PROB_MALE_PARM][0] = 0.99;
+  TESTLT(tst, s.prob_event(PROB_MALE_PARM) - 0.9, 0.0001,
+	 "Probability of event: ts = 0.5, prob=0.99");
+
+  // With probability = 0.99 and time period = 0.5, we
+  // run event over a population twice, and the final number of
+  // positives should then be very close to 99%.
+  std::vector<bool> bools(100000, false);
+  for (auto it = bools.begin(); it != bools.end(); ++it) {
+    if (*it == false)
+      if (s.is_event(PROB_MALE_PARM))
+	*it = true;
+  }
+  for (auto it = bools.begin(); it != bools.end(); ++it) {
+    if (*it == false)
+      if (s.is_event(PROB_MALE_PARM))
+	*it = true;
+  }
+  size_t n =  count_if(bools.begin(), bools.end(), [](const bool b)
+		       {return b;});
+  TESTLT(tst, abs( (double) n / bools.size()) - 0.99, 0.0001,
+	 "Adjusted time period for random event.");
 }
 
 void test_monte_carlo(tst::TestSeries &tst,
@@ -399,6 +513,8 @@ unsigned strtou(char *str)
 	    << "\t-s\tsets the number of simple simulations (0 for none)\n"
 	    << "\t-m\tsets the number of Monte Carlo simulations "
 	    << "(0 for none)\n"
+	    << "\t-c\tsets the name of the csv file to read "
+	    << "(_ to skip csv test)\n"
 	    << "\t-v\tprints out verbose information including times\n"
 	    << "\t-h\tprints out this help text"
 	    << std::endl;
@@ -411,9 +527,10 @@ int main(int argc, char *argv[])
   unsigned num_mc_simulations = 8;
   bool verbose = false;
   int opt;
+  std::string csv_filename = "testsim.csv";
 
   try {
-    while ((opt = getopt(argc, argv, "a:s:m:vh")) != -1) {
+    while ((opt = getopt(argc, argv, "a:s:m:c:vh")) != -1) {
       switch (opt) {
       case 'a':
 	num_agents = strtou(optarg);
@@ -426,6 +543,9 @@ int main(int argc, char *argv[])
 	break;
       case 'v':
 	verbose = true;
+	break;
+      case 'c':
+	csv_filename = std::string(optarg);
 	break;
       case 'h':
 	display_help(argv[0], "");
@@ -440,10 +560,14 @@ int main(int argc, char *argv[])
   }
 
   try {
-    // Run the simple simulation (default once)
-    for (unsigned i = 0; i < num_simulations; ++i)
+    // Run the test simulations (default once)
+    for (unsigned i = 0; i < num_simulations; ++i) {
       test_simple_simulation(t, num_agents, verbose);
+    }
+    if (csv_filename != "" && csv_filename != "_")
+      test_csv_simulation(t, csv_filename.c_str(), verbose);
 
+    test_norm_functions(t);
     // Run the Monte Carlo simulation if number of simulations to run > 0
     if (num_mc_simulations > 0)
       test_monte_carlo(t, num_agents, num_mc_simulations, verbose);

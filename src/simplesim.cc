@@ -129,7 +129,6 @@ void hiv_transition_event(Simulation *s, Agent *a)
 void death_event(Simulation *s, Agent *a)
 {
   double background_mortality = s->parameters[BACKGROUND_MORTALITY_PARM][0];
-  double time_step = s->parameters[TIME_STEP_SIZE_PARM][0];
   double stage4_death = s->parameters[BACKGROUND_MORTALITY_PARM][0];
   bool must_die = false;
   std::uniform_real_distribution<> dis;
@@ -215,7 +214,6 @@ void simple_simulation(unsigned num_agents,
 		       unsigned num_simulations)
 {
   Simulation s;
-  Perturbers dists = {};
 
   // Set parameters
   s.set_parameters({
@@ -335,22 +333,14 @@ unsigned strtou(char *str)
 int main(int argc, char *argv[])
 {
   unsigned num_agents = 12;
-  unsigned num_simulations = 1;
-  unsigned num_mc_simulations = 8;
   bool verbose = false;
   int opt;
 
   try {
-    while ((opt = getopt(argc, argv, "a:s:m:vh")) != -1) {
+    while ((opt = getopt(argc, argv, "a:vh")) != -1) {
       switch (opt) {
       case 'a':
 	num_agents = strtou(optarg);
-	break;
-      case 's':
-	num_simulations = strtou(optarg);
-	break;
-      case 'm':
-	num_mc_simulations = strtou(optarg);
 	break;
       case 'v':
 	verbose = true;

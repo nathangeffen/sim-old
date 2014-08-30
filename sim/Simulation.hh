@@ -12,6 +12,7 @@ namespace sim {
     size_t current_agent_index_;
     std::list <GlobalStateInit> init_global_state_funcs_;
     std::list <AgentInit> init_agent_funcs_;
+    std::vector <std::vector <std::string> > csv_matrix_;
 #ifdef SIM_VECTORIZE
     size_t num_parms_;
     size_t num_states_;
@@ -22,10 +23,15 @@ namespace sim {
   public:
     ParameterMap parameters;
     StateMap states;
-    GlobalEvents events;
+    GlobalEvents global_events;
+    AgentEvents agent_events;
     Reports reports;
     std::vector<Agent *> agents;
     std::vector<Agent *> dead_agents;
+    std::unordered_map<unsigned, std::string> parms_names;
+    std::unordered_map<std::string, unsigned> names_parms;
+    std::unordered_map<unsigned, std::string> states_names;
+    std::unordered_map<std::string, unsigned> names_states;
     #ifdef SIM_VECTORIZE
     Simulation(unsigned seed = 13,
 	       size_t num_parms = 100,
@@ -36,18 +42,29 @@ namespace sim {
     ~Simulation();
     virtual Agent* append_agent();
     void set_number_agents(const unsigned num_agents);
+    void set_agents_from_csv();
     unsigned iteration() const;
     void kill_agent(size_t agent_index_);
     void kill_agent();
-    void set_parameter(unsigned parameter,
-		       const std::initializer_list<real> values);
-    void set_parameters(const std::initializer_list< std::pair<
-			unsigned, const std::initializer_list<real> > > parms);
+    void set_parameter(const unsigned parameter,
+		       const std::initializer_list<real> values,
+		       const char* name = "");
+    struct parameter_parms_ {
+      const unsigned parameter;
+      const std::initializer_list<real> values;
+      const char * name;
+    };
+    void set_parameters(const std::initializer_list< const parameter_parms_>);
+    void set_state_name(const unsigned state, const char *name);
+    void set_state_names(std::initializer_list< std::pair <
+			 const unsigned, const char * > >
+			 state_names);
     void set_global_state_initializers(const std::initializer_list
 				       <GlobalStateInit>  init_funcs);
     void set_global_states();
     void set_global_states(const std::initializer_list<GlobalStateInit>
 			   init_funcs);
+    void set_agent_csv_initializer(const char *filename, char delim=',');
     void set_agent_initializers(const std::initializer_list <AgentInit>
 				init_funcs);
     void set_global_events(const std::initializer_list<GlobalEvent> evnts);
@@ -62,30 +79,6 @@ namespace sim {
     };
 
     void set_reports(const std::initializer_list <report_parms_> reprts);
-    void initialize(const std::initializer_list <AgentInit> &init_funcs,
-			   const std::initializer_list<AgentEvent> events);
-
-    void initialize(const unsigned num_agents,
-			   const std::initializer_list <AgentInit> &init_funcs,
-			   const std::initializer_list<AgentEvent> events);
-    void initialize(const std::initializer_list< std::pair<
-		    unsigned, const std::initializer_list<real> > > parms,
-		    const unsigned num_agents,
-		    const std::initializer_list <AgentInit> init_funcs,
-		    const std::initializer_list<AgentEvent> events);
-    void initialize(std::initializer_list<
-		    std::pair<
-		    unsigned,
-		    const std::initializer_list<real>
-		    >
-		    > parameters,
-		    const std::initializer_list<GlobalStateInit>
-		    global_state_init_funcs,
-		    const std::initializer_list<GlobalEvent> global_events,
-		    const unsigned num_agents,
-		    const std::initializer_list <AgentInit> agent_init_funcs,
-		    const std::initializer_list<AgentEvent> agent_events,
-		    const std::initializer_list <report_parms_> reports);
     void initialize_states();
     virtual void simulate(const unsigned num_steps,
 			  const bool interim_reports);
@@ -95,9 +88,9 @@ namespace sim {
 		    std::function<bool(const Simulation *, unsigned)> carryon);
     // Helper functions
     real prob_event(real P1, real T1, real T2) const;
+    real prob_event(unsigned parameter) const;
     bool is_event(real rand, real P1, real T1, real T2) const;
     bool is_event(real P1, real T1, real T2) const;
-    bool is_event(real P1) const;
     bool is_event(unsigned parameter) const;
   };
 }
