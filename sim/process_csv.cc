@@ -1,4 +1,24 @@
+#include "common.hh"
 #include "process_csv.hh"
+
+std::vector< std::vector <sim::real> >
+sim::convert_csv_strings_to_reals(std::vector< std::vector <std::string> >&
+				  matrix_strings)
+{
+  std::vector< std::vector <sim::real> > matrix_real;
+
+  // Skip the first row which is the header
+  for (size_t i = 1; i < matrix_strings.size(); ++i) {
+    if (matrix_strings[i].size() != matrix_strings[0].size())
+      throw sim::SimulationException("Csv rows must have same number entries.");
+    std::vector<sim::real> row;
+    for (size_t j = 0; j < matrix_strings[i].size(); ++j) {
+      row.push_back(atof(matrix_strings[i][j].c_str()));
+    }
+    matrix_real.push_back(row);
+  }
+  return matrix_real;
+}
 
 static std::vector< std::vector <std::string> >
 process_csv_lines(const std::vector<std::string> & lines,

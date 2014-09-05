@@ -12,7 +12,9 @@ namespace sim {
     size_t current_agent_index_;
     std::list <GlobalStateInit> init_global_state_funcs_;
     std::list <AgentInit> init_agent_funcs_;
-    std::vector <std::vector <std::string> > csv_matrix_;
+    std::vector <std::string> csv_col_headings_;
+    std::vector <std::vector <real> > csv_matrix_;
+    size_t csv_num_agents_col_;
 #ifdef SIM_VECTORIZE
     size_t num_parms_;
     size_t num_states_;

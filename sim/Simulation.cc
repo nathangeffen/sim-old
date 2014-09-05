@@ -36,6 +36,8 @@ Simulation::~Simulation()
 {
   for (auto & agent : agents)
     delete agent;
+  for (auto & agent : dead_agents)
+    delete agent;
 }
 
 
@@ -368,46 +370,46 @@ Simulation::is_event(unsigned parameter) const
 void
 Simulation::set_agents_from_csv()
 {
-  bool num_found = false;
-  size_t num_agents_col;
-  if (csv_matrix_.size() > 0) {
-    // Process header
-    for (size_t i = 0; i < csv_matrix_[0].size(); ++i) {
-      if (csv_matrix_[0][i] == "#") {
-	if (num_found == true)
-	  throw SimulationException("Two rows with number of agents in csv.");
-	num_agents_col = i;
-	num_found = true;
-      } else {
-	if (names_states.find(csv_matrix_[0][i]) == names_states.end())
-	  throw SimulationException("CSV key not found in state table");
-      }
-    }
-    if (num_found == false)
-      throw SimulationException("No row with number of agents in csv.");
-    for (size_t i = 1; i < csv_matrix_.size(); ++i) {
-      if (csv_matrix_[i].size() != csv_matrix_[0].size())
-	throw SimulationException("Csv rows must have same number entries.");
-      unsigned num_agents = (unsigned)
-	atoi(csv_matrix_[i][num_agents_col].c_str());
-      for (size_t j = 0; j < num_agents; ++j) {
-	Agent *a = append_agent();
-	for (size_t k = 0; k < csv_matrix_[i].size(); ++k) {
-	  if (k == num_agents_col)
-	    continue;
-	  double d = atof(csv_matrix_[i][k].c_str());
-	  a->states[names_states[csv_matrix_[0][k]]] = {d};
-	}
+  for (size_t i = 0; i < csv_matrix_.size(); ++i) {
+    unsigned num_agents = (unsigned) csv_matrix_[i][csv_num_agents_col_];
+    for (size_t j = 0; j < num_agents; ++j) {
+      Agent *a = append_agent();
+      for (size_t k = 0; k < csv_matrix_[i].size(); ++k) {
+	if (k == csv_num_agents_col_)
+	  continue;
+	a->states[names_states[csv_col_headings_[k]]] = {csv_matrix_[i][k]};
       }
     }
   }
 }
 
+
 void
 Simulation::set_agent_csv_initializer(const char *filename, char delim)
 {
+  std::vector <std::vector <std::string> > csv_matrix_strings;
   try {
-    csv_matrix_ = process_csv_file(filename, delim);
+    csv_matrix_strings = process_csv_file(filename, delim);
+    if (csv_matrix_strings.size() == 0)
+      throw SimulationException("No headings in CSV file.");
+
+    csv_matrix_ = convert_csv_strings_to_reals(csv_matrix_strings);
+    // Process header
+    bool num_found = false;
+    csv_col_headings_ = csv_matrix_strings[0];
+    for (size_t i = 0; i < csv_col_headings_.size(); ++i) {
+      if (csv_col_headings_[i] == "#") {
+	if (num_found == true)
+	  throw SimulationException("Two rows with number of agents in csv.");
+	csv_num_agents_col_ = i;
+	num_found = true;
+      } else {
+	if (names_states.find(csv_col_headings_[i]) == names_states.end())
+	  throw SimulationException("CSV key not found in state table");
+      }
+    }
+    if (num_found == false)
+      throw SimulationException("No row with number of agents in csv.");
   } catch (std::exception &e) {
     throw SimulationException(e.what());
   }
