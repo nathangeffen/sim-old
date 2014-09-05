@@ -12,9 +12,11 @@ AM_CXXFLAGS = -std=c++11 -Wall -Werror -pedantic
 lib_LTLIBRARIES = libsim-@SIM_API_VERSION@.la
 libsim_@SIM_API_VERSION@_la_SOURCES = sim/Simulation.cc sim/Simulation.hh \
 	sim/sim.hh sim/process_csv.cc sim/process_csv.hh sim/common.hh
-bin_PROGRAMS = testsim simplesim
+bin_PROGRAMS = testsim simplesim templatesim
 testsim_SOURCES = src/testsim.cc src/test.cc src/test.hh
 testsim_LDADD = libsim-@SIM_API_VERSION@.la
+templatesim_SOURCES = src/templatesim.cc
+templatesim_LDADD = libsim-@SIM_API_VERSION@.la
 simplesim_SOURCES = src/simplesim.cc src/test.cc src/test.hh
 simplesim_LDADD = libsim-@SIM_API_VERSION@.la
 

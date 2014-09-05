@@ -19,15 +19,6 @@
 
 using namespace sim;
 
-class ArgException : public std::exception {
-private:
-  std::string msg_ = "Argument exception";
-public:
-  ArgException(const char *s) { msg_ += ": "; msg_ += s; }
-  ArgException() {}
-  virtual const char* what() const throw() { return msg_.c_str(); }
-};
-
 // Greek parameters from Figure 2 of Granich et al.
 enum UserParameters {
   INITIAL_POP_PARM = LAST_PARM + 1,
@@ -85,18 +76,6 @@ void hiv_state_init(Agent *a, Simulation *s)
 }
 
 /* EVENTS */
-
-/* Global Events */
-
-class IncrementTimeEvent {
-private:
-  real time_step_size_;
-public:
-  IncrementTimeEvent(real time_step_size) : time_step_size_(time_step_size) {}
-  void operator()(Simulation* s) {
-    s->states[CURRENT_DATE_STATE][0] += time_step_size_;
-  }
-};
 
 /* Agent Events */
 

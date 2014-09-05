@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstring>
 
+#include "sim.hh"
 #include "Simulation.hh"
 #include "process_csv.hh"
 

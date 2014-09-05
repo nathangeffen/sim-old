@@ -13,15 +13,6 @@
 
 using namespace sim;
 
-class ArgException : public std::exception {
-private:
-  std::string msg_ = "Argument exception";
-public:
-  ArgException(const char *s) { msg_ += ": "; msg_ += s; }
-  ArgException() {}
-  virtual const char* what() const throw() { return msg_.c_str(); }
-};
-
 enum UserParameters {
   POSITION_INIT_PARM = LAST_PARM + 1,
   POSITION_UPDATE_PARM
@@ -34,18 +25,6 @@ enum UserStates {
 tst::TestSeries t("Sim");
 
 /* EVENTS */
-
-/* Global Events */
-
-class IncrementTimeEvent {
-private:
-  real time_step_size_;
-public:
-  IncrementTimeEvent(real time_step_size) : time_step_size_(time_step_size) {}
-  void operator()(Simulation* s) {
-    s->states[CURRENT_DATE_STATE][0] += time_step_size_;
-  }
-};
 
 /* Agent Events */
 

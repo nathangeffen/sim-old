@@ -39,3 +39,4 @@ src/sim.h
 build-aux/
 configure.scan
 simplesim
+templatesim

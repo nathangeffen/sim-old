@@ -1,7 +1,7 @@
 #ifndef SIMULATION_H
 #define SIMULATION_H
 
-#include "common.hh"
+//#include "common.hh"
 
 namespace sim {
   class Simulation {
@@ -93,5 +93,19 @@ namespace sim {
     bool is_event(real P1, real T1, real T2) const;
     bool is_event(unsigned parameter) const;
   };
+
+
+  /* Commonly used events */
+
+  class IncrementTimeEvent {
+  private:
+    real time_step_size_;
+  public:
+    IncrementTimeEvent(real time_step_size) : time_step_size_(time_step_size) {}
+    void operator()(Simulation* s) {
+      s->states[CURRENT_DATE_STATE][0] += time_step_size_;
+    }
+  };
 }
+
 #endif

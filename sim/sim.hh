@@ -1,13 +1,7 @@
 #ifndef SIM_H
 #define SIM_H
 
-#include <functional>
-#include <list>
-#include <random>
-#include <unordered_map>
-#include <vector>
-#include <tuple>
-
+#include "common.hh"
 #include "Simulation.hh"
 
 

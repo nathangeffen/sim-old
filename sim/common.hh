@@ -10,6 +10,16 @@
 #include <tuple>
 
 namespace sim {
+
+  class ArgException : public std::exception {
+  private:
+    std::string msg_ = "Argument exception";
+  public:
+    ArgException(const char *s) { msg_ += ": "; msg_ += s; }
+    ArgException() {}
+    virtual const char* what() const throw() { return msg_.c_str(); }
+  };
+
   typedef double real;
 
   enum Parameters {
