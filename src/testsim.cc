@@ -15,7 +15,10 @@ using namespace sim;
 
 enum UserParameters {
   POSITION_INIT_PARM = LAST_PARM + 1,
-  POSITION_UPDATE_PARM
+  POSITION_UPDATE_PARM,
+  CSV_PARM_1,
+  CSV_PARM_2,
+  CSV_PARM_3
 };
 
 enum UserStates {
@@ -106,6 +109,7 @@ void gender_report(const Simulation *s)
   TESTEQ(t, 0.5, (double) num_males / s->agents.size(),
 	 "Number males reasonable.");
 }
+
 
 class PositionReport {
   tst::TestSeries &t_;
@@ -268,9 +272,75 @@ void test_simple_simulation(tst::TestSeries &tst,
   }
 }
 
-void test_csv_simulation(tst::TestSeries &tst,
-			 const char *filename,
-			 const bool verbose)
+void test_parameter_csv_simulation(tst::TestSeries &tst,
+			       const char *filename,
+			       const bool verbose)
+{
+  Simulation s;
+
+ // Parameters
+  s.set_parameters({
+      {INTERIM_REPORT_PARM, {1.0}, "interim report"},
+	{START_DATE_PARM, {1980.0}, "start date"},
+	  {TIME_STEP_SIZE_PARM, {1.0 / 365.0}, "time step size"},
+	    {NUM_TIME_STEPS_PARM, {10}, "num time steps"},
+	      {POSITION_INIT_PARM, {0.0, 0.0}, "position init"},
+		{POSITION_UPDATE_PARM, {1.0, 2.0}, "position update"},
+		  {PROB_MALE_PARM, {1.0}, "prob male"}
+    });
+
+  // Global state initiation functions
+  s.set_global_states({
+      [](Simulation *s) {
+	s->states[CURRENT_DATE_STATE] = {s->parameters[START_DATE_PARM][0]};
+      }});
+
+
+  // Global events
+  s.set_global_events({
+      IncrementTimeEvent(s.parameters[TIME_STEP_SIZE_PARM][0])});
+
+  // Set parameter names
+  s.set_parameter_names({
+      {CSV_PARM_1, "Parameter 1"},
+	{CSV_PARM_2, "Parameter 2"},
+	  {CSV_PARM_3, "Parameter 3"}});
+
+  // Set parameters from CSV
+  s.set_parameters_csv_initializer(filename);
+
+  TESTEQ(tst, s.parameters[CSV_PARM_1].size(), 4,
+	 "number of parameters created for first csv column");
+  TESTEQ(tst, s.parameters[CSV_PARM_2].size(), 2,
+	 "number of parameters created for second csv column");
+  TESTEQ(tst, s.parameters[CSV_PARM_3].size(), 3,
+	 "number of parameters created for third csv column");
+
+  s.simulate(s.parameters[NUM_TIME_STEPS_PARM][0],
+	     s.parameters[INTERIM_REPORT_PARM][0]);
+
+  double total = 0.0;
+  for (auto & val: s.parameters[CSV_PARM_1])
+    total += val;
+  TESTEQ(tst, total, 20.0,
+	 "sum of parameters created for first csv column");
+  total = 0.0;
+  for (auto & val: s.parameters[CSV_PARM_2])
+    total += val;
+  TESTEQ(tst, total, 2.0,
+	 "sum of parameters created for second csv column");
+  total = 0.0;
+  for (auto & val: s.parameters[CSV_PARM_3])
+    total += val;
+  TESTEQ(tst, total, 7.0,
+	 "sum of parameters created for third csv column");
+
+}
+
+
+void test_agent_csv_simulation(tst::TestSeries &tst,
+			       const char *filename,
+			       const bool verbose)
 {
   Simulation s;
 
@@ -299,7 +369,7 @@ void test_csv_simulation(tst::TestSeries &tst,
   // Set state names
   s.set_state_names({ {SEX_STATE, "sex"}, {DOB_STATE, "dob"} });
 
-  // Set CSV file initializer
+  // Set agent CSV file initializer
   s.set_agent_csv_initializer(filename);
 
   s.simulate(s.parameters[NUM_TIME_STEPS_PARM][0],
@@ -493,8 +563,10 @@ unsigned strtou(char *str)
 	    << "\t-s\tsets the number of simple simulations (0 for none)\n"
 	    << "\t-m\tsets the number of Monte Carlo simulations "
 	    << "(0 for none)\n"
-	    << "\t-c\tsets the name of the csv file to read "
-	    << "(_ to skip csv test)\n"
+	    << "\t-p\tsets the name of the parameter csv file to read "
+	    << " (_ to skip parameter csv test)\n"
+	    << "\t-c\tsets the name of the agent csv file to read "
+	    << "(_ to skip agent csv test)\n"
 	    << "\t-v\tprints out verbose information including times\n"
 	    << "\t-h\tprints out this help text"
 	    << std::endl;
@@ -507,10 +579,11 @@ int main(int argc, char *argv[])
   unsigned num_mc_simulations = 8;
   bool verbose = false;
   int opt;
-  std::string csv_filename = "data/testsim.csv";
+  std::string agent_csv_filename = "data/testsimagent.csv";
+  std::string parameter_csv_filename = "data/testsimparameter.csv";
 
   try {
-    while ((opt = getopt(argc, argv, "a:s:m:c:vh")) != -1) {
+    while ((opt = getopt(argc, argv, "a:s:m:c:p:vh")) != -1) {
       switch (opt) {
       case 'a':
 	num_agents = strtou(optarg);
@@ -525,7 +598,10 @@ int main(int argc, char *argv[])
 	verbose = true;
 	break;
       case 'c':
-	csv_filename = std::string(optarg);
+	agent_csv_filename = std::string(optarg);
+	break;
+      case 'p':
+	parameter_csv_filename = std::string(optarg);
 	break;
       case 'h':
 	display_help(argv[0], "");
@@ -544,8 +620,11 @@ int main(int argc, char *argv[])
     for (unsigned i = 0; i < num_simulations; ++i) {
       test_simple_simulation(t, num_agents, verbose);
     }
-    if (csv_filename != "" && csv_filename != "_")
-      test_csv_simulation(t, csv_filename.c_str(), verbose);
+    if (agent_csv_filename != "" && agent_csv_filename != "_")
+      test_agent_csv_simulation(t, agent_csv_filename.c_str(), verbose);
+
+    if (parameter_csv_filename != "" && parameter_csv_filename != "_")
+      test_parameter_csv_simulation(t, parameter_csv_filename.c_str(), verbose);
 
     test_norm_functions(t);
     // Run the Monte Carlo simulation if number of simulations to run > 0

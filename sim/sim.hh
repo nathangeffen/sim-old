@@ -2,6 +2,7 @@
 #define SIM_H
 
 #include "common.hh"
+#include "process_csv.hh"
 #include "Simulation.hh"
 
 

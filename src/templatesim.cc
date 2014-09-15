@@ -18,7 +18,20 @@
 #include "sim/sim.hh"
 #include "test.hh"
 
-using namespace sim;
+// using namespace sim;
+
+
+enum UserParameters {
+  // $$ Change FIRST_USER_PARM to a name of your choice.
+  FIRST_USER_PARM = sim::LAST_PARM + 1
+  // $$ parameters here.
+};
+
+enum UserStates {
+  // $$ Change FIRST_USER_STATE to a name of your choice
+  FIRST_USER_STATE = sim::LAST_STATE + 1
+  // $$ Add states here
+};
 
 /* EVENTS */
 
@@ -30,14 +43,15 @@ using namespace sim;
 
 // Insert agent events here
 
-void death_event(Simulation* s, Agent *agent)
+void death_event(sim::Simulation* s, sim::Agent *agent)
 {
-  if (agent->states[ALIVE_STATE][0]) {
+  if (agent->states[sim::ALIVE_STATE][0]) {
     // $$ Insert code here to determine if agent should die
     if ( false ) {
-      agent->states[ALIVE_STATE][0] = 0;
-      agent->states[DEATH_AGE_STATE][0] = s->states[CURRENT_DATE_STATE][0];
-	s->kill_agent();
+      agent->states[sim::ALIVE_STATE][0] = 0;
+      agent->states[sim::DEATH_AGE_STATE][0] =
+	s->states[sim::CURRENT_DATE_STATE][0];
+      s->kill_agent();
     }
   }
 }
@@ -46,19 +60,19 @@ void death_event(Simulation* s, Agent *agent)
 
 /* REPORTS */
 
-void mortality_report(const Simulation *s)
+void mortality_report(const sim::Simulation *s)
 {
   // $$ Replace all this code with your own.
 
 size_t num_alive = std::count_if(s->agents.begin(), s->agents.end(),
-	       [](const Agent *agent){
-				   return agent->states.at(ALIVE_STATE)[0];
+				 [](const sim::Agent *agent){
+				   return agent->states.at(sim::ALIVE_STATE)[0];
 				 });
 
  size_t num_dead = std::count_if(s->dead_agents.begin(),
 				 s->dead_agents.end(),
-				 [](const Agent *agent){
-				   if (agent->states.at(ALIVE_STATE)[0])
+				 [](const sim::Agent *agent){
+				   if (agent->states.at(sim::ALIVE_STATE)[0])
 				     return false;
 				   else
 				     return true;
@@ -71,10 +85,10 @@ size_t num_alive = std::count_if(s->agents.begin(), s->agents.end(),
 
 /* $$ Insert other state initiation functions here. */
 
-void alive_state_init(Agent *a, Simulation *s)
+void alive_state_init(sim::Agent *a, sim::Simulation *s)
 {
-  a->states[ALIVE_STATE] = {1};
-  a->states[DEATH_AGE_STATE] = {0.0};
+  a->states[sim::ALIVE_STATE] = {1};
+  a->states[sim::DEATH_AGE_STATE] = {0.0};
 }
 
 
@@ -82,17 +96,23 @@ void run_simulation(
 		    // Number of simulations to run.
 		    // Typically set to 1 unless you're doing
 		    // Monte Carlo or some other type of uncertainty analysis.
-		    unsigned num_simulations,
+		    const unsigned num_simulations,
+		    // Parameter CSV file
+		    const char * parameter_csv_filename,
 		    // Number of agents to be created. 0 if using a CSV file.
-		    unsigned num_agents,
+		    const unsigned num_agents,
 		    // Agent comma separated filename.
 		    // "" or NULL if not being used.
-		    const char * agent_csv_filename
+		    const char * agent_csv_filename,
+		    // Size of the time step. E.g. .00273972602739726027 is 1 day
+		    const double time_step,
+		    // Number of iterations/simulation. Default is 7300.
+		    const unsigned iterations
 		    )
 {
-  Simulation s;
+  sim::Simulation s;
 
-  Perturbers sensitivities = {
+  sim::Perturbers sensitivities = {
     // $$ If you wish to do sensitivity testing
     //    on one or more parameters, you will need to specify which
     //    parameters, and how they must be perturbed here.
@@ -101,32 +121,48 @@ void run_simulation(
     // {POSITION_UPDATE_PARM, std::normal_distribution<>(-13.5, 10.0) }
   };
 
+  // $$ For reporting and CSV file processing,
+  //    you might want to set parameter names to something descriptive.
+  s.set_parameter_names({
+      {sim::START_DATE_PARM, "start date"},
+	{sim::NUM_TIME_STEPS_PARM, "time steps"} });
+
+  // $$ For reporting and CSV file processing,
+  //    you might want to set state names to something descriptive.
+  s.set_state_names({ {sim::SEX_STATE, "sex"}, {sim::DOB_STATE, "dob"} });
+
   // Set the parameters
   s.set_parameters({
       // $$ You might need to modify some of these parameters
       // Set this to 1.0 if you want any of the reports to be run
       // every specified number of iterations of the simulation.
-      {INTERIM_REPORT_PARM, {0.0}, "interim report"},
+      {sim::INTERIM_REPORT_PARM, {0.0}, "interim report"},
 	// Set this to the start date of the simulation.
 	// Default is 1 January 1980.
-	{START_DATE_PARM, {1980.0}, "start date"},
+	{sim::START_DATE_PARM, {1980.0}, "start date"},
 	// Set this to the time step. 1.0 is one year. 1.0 / 365 is 1 day.
 	// 1.0 / 12 is one month.
 	// Default is one day.
-	  {TIME_STEP_SIZE_PARM, {1.0 / 365}, "time step size"},
+	  {sim::TIME_STEP_SIZE_PARM, {time_step}, "time step size"},
 	  // Set this to the number of iterations.
 	  // Default is 7300, the number of days in 20 years.
-	    {NUM_TIME_STEPS_PARM, {20.0 / (1.0 / 365)}, "num time steps"}
+	    {sim::NUM_TIME_STEPS_PARM, { (double) iterations}, "num time steps"}
 	    // $$ Add other parameters here.
     });
+
+  // If there's a parameter CSV file, it gets processed here.
+  if (parameter_csv_filename && strlen(parameter_csv_filename) > 0)
+    s.set_parameters_csv_initializer(parameter_csv_filename);
+
 
   // Global state initiation functions
   s.set_global_states({
       // Sets the current date for the simulation.
       // Default is taken from the STATE_DATE_PARM. You should not modify
       // this. Rather modify the STATE_DATE_PARM parameter above.
-      [](Simulation *s) {
-	s->states[CURRENT_DATE_STATE] = {s->parameters[START_DATE_PARM][0]};
+      [](sim::Simulation *s) {
+	s->states[sim::CURRENT_DATE_STATE] =
+	  {s->parameters[sim::START_DATE_PARM][0]};
       }
       // $$ Add other global state initiation functions here.
     });
@@ -135,7 +171,7 @@ void run_simulation(
   s.set_global_events({
       // This event updates the simulation date on each iteration.
       // Unlikely you'd want to remove it.
-      IncrementTimeEvent(s.parameters[TIME_STEP_SIZE_PARM][0])
+      sim::IncrementTimeEvent(s.parameters[sim::TIME_STEP_SIZE_PARM][0])
 	// $$ Add events to change global states here.
 	});
 
@@ -186,13 +222,13 @@ void run_simulation(
 
   // Now run a montecarlo simulation.
   try {
-    s.montecarlo(s.parameters[NUM_TIME_STEPS_PARM][0],
-		 s.parameters[INTERIM_REPORT_PARM][0],
+    s.montecarlo(s.parameters[sim::NUM_TIME_STEPS_PARM][0],
+		 s.parameters[sim::INTERIM_REPORT_PARM][0],
 		 sensitivities,
 		 // $$ You might want to change this lamba function
 		 //    if you want something more sophisticated than
 		 //    straightforward Monte Carlo uncertainty analysis.
-		 [&num_simulations](const Simulation *simulation,
+		 [&num_simulations](const sim::Simulation *simulation,
 				    const unsigned sim_num) {
 		   return sim_num < num_simulations;
 		 });
@@ -202,50 +238,7 @@ void run_simulation(
   }
 }
 
-
-/* Convert string argument to unsigned. */
-unsigned strtou(char *str)
-{
-  char *endptr;
-  long val;
-  std::stringstream msg;
-
-  errno = 0;    /* To distinguish success/failure after call */
-  val = strtol(str, &endptr, 10);
-
-  /* Check for various possible errors */
-
-  if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
-      || (errno != 0 && val == 0)) {
-    throw ArgException(strerror(errno));
-  }
-
-  if (strcmp(endptr, "") != 0) {
-    msg << "Number " << str << " is not valid. " << std::endl;
-    throw ArgException(msg.str().c_str());
-  }
-
-  if (endptr == str) {
-    msg << "No digits were found in number" << std::endl;
-    throw ArgException(msg.str().c_str());
-  }
-
-  if (val < 0) {
-    msg << "Number " << str << " smaller than 0. "
-	<< "Must be unsigned integer." << std::endl;
-    throw ArgException(msg.str().c_str());
-  }
-
-  if (val > UINT_MAX) {
-    msg << "Number " << str << " too large. "
-	<< "Must be unsigned integer <= " << UINT_MAX << std::endl;
-    throw ArgException(msg.str().c_str());
-  }
-
-  return (unsigned) val;
-}
-
- void display_help(const char *prog_name, const char *msg)
+void display_help(const char *prog_name, const char *msg)
 {
   if (strcmp(msg, "") != 0)
     std::cerr << msg << std::endl;
@@ -259,37 +252,54 @@ unsigned strtou(char *str)
 	    << "\t-s\tNumber of simulations to run\n"
 	    << "\t-a\tNumber of agents\n"
 	    << "\t-f\tComma separated file for agent initialization\n"
+	    << "\t-t\tTime step for simulations\n"
+	    << "\t-i\tNumber of iterations per simulation\n"
 	    << "\t-h\tDisplay this help text"  << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
   // $$ Default number of agent
-  unsigned num_agents = 10000;
+  unsigned num_agents = 1000;
   // $$ Default number of simulations
   unsigned num_simulations = 1;
+  // $$ Default to no parameter csv file
+  std::string parameter_csv_filename = "";
   // $$ Default to no agent csv file
   std::string agent_csv_filename = "";
+  // $$ Default to set time step. 1.0 / 365 is one day. 1.0 / 12 is one month.
+  double time_step = 1.0 / 365;
+  // $$ Number of iterations to run each simulation. Default is 20 years.
+  unsigned iterations = 365 * 20;
 
   int opt;
 
   try {
-    while ((opt = getopt(argc, argv, "s:a:m:f:h")) != -1) {
+    while ((opt = getopt(argc, argv, "s:a:m:f:p:t:i:h")) != -1) {
       switch (opt) {
       case 's': // Number of simulations to run
-	num_simulations = strtou(optarg);
+	num_simulations = sim::strtou(optarg);
+	break;
+      case 'p': // comma separated initialization file for parameters
+	parameter_csv_filename = std::string(optarg);
 	break;
       case 'a': // Number of agents
-	num_agents = strtou(optarg);
+	num_agents = sim::strtou(optarg);
 	break;
       case 'f': // comma separated initialization file for agents
 	agent_csv_filename = std::string(optarg);
+	break;
+      case 't':
+	time_step = sim::strtor(optarg);
+	break;
+      case 'i':
+	iterations = sim::strtor(optarg);
 	break;
       case 'h': // Display help
 	display_help(argv[0], "");
 	return EXIT_SUCCESS;
       default:
-	throw ArgException();
+	throw sim::ArgException();
       }
     }
   } catch (std::exception &e) {
@@ -299,8 +309,11 @@ int main(int argc, char *argv[])
 
     try {
       run_simulation(num_simulations,
+		     parameter_csv_filename.c_str(),
 		     num_agents,
-		     agent_csv_filename.c_str());
+		     agent_csv_filename.c_str(),
+		     time_step,
+		     iterations);
       return EXIT_SUCCESS;
     } catch(std::exception &e) {
       std::cerr << "Error: " << e.what() << std::endl;

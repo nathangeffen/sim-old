@@ -88,6 +88,24 @@ Simulation::set_parameters(const std::initializer_list< const parameter_parms_>
 }
 
 void
+Simulation::set_parameter_name(const unsigned parameter,
+			       const char *name)
+{
+  parms_names[parameter] = std::string(name);
+  names_parms[std::string(name)] = parameter;
+}
+
+void
+Simulation::set_parameter_names(std::initializer_list< std::pair <
+				const unsigned,
+				const char * > > parameter_names)
+{
+  for (auto & s : parameter_names)
+    set_parameter_name(s.first, s.second);
+}
+
+
+void
 Simulation::set_state_name(const unsigned state,
 			   const char *name)
 {
@@ -231,7 +249,7 @@ void
 Simulation::initialize_states()
 {
   set_global_states();
-  if (csv_matrix_.size())
+  if (csv_agent_matrix_.size())
     set_agents_from_csv();
   set_agent_states();
 }
@@ -368,18 +386,59 @@ Simulation::is_event(unsigned parameter) const
 }
 
 void
+Simulation::set_parameters_from_csv()
+{
+
+}
+
+void
 Simulation::set_agents_from_csv()
 {
-  for (size_t i = 0; i < csv_matrix_.size(); ++i) {
-    unsigned num_agents = (unsigned) csv_matrix_[i][csv_num_agents_col_];
+  for (size_t i = 0; i < csv_agent_matrix_.size(); ++i) {
+    unsigned num_agents = (unsigned)
+      csv_agent_matrix_[i][csv_num_agents_col_];
     for (size_t j = 0; j < num_agents; ++j) {
       Agent *a = append_agent();
-      for (size_t k = 0; k < csv_matrix_[i].size(); ++k) {
+      for (size_t k = 0; k < csv_agent_matrix_[i].size(); ++k) {
 	if (k == csv_num_agents_col_)
 	  continue;
-	a->states[names_states[csv_col_headings_[k]]] = {csv_matrix_[i][k]};
+	a->states[names_states[csv_agent_col_headings_[k]]] =
+	  {csv_agent_matrix_[i][k]};
       }
     }
+  }
+}
+
+
+void
+Simulation::set_parameters_csv_initializer(const char *filename, char delim)
+{
+  std::vector <std::vector <std::string> > csv_matrix_strings;
+  std::vector <std::string> csv_parameter_col_headings;
+  try {
+    csv_matrix_strings = process_csv_file(filename, delim);
+    if (csv_matrix_strings.size() == 0)
+      throw SimulationException("No headings in CSV file.");
+
+    // Process header
+    csv_parameter_col_headings = csv_matrix_strings[0];
+    for (size_t i = 0; i < csv_parameter_col_headings.size(); ++i) {
+      if (names_parms.find(csv_parameter_col_headings[i]) == names_parms.end())
+	throw SimulationException("CSV key not found in parameters table");
+    }
+
+    // Fill each of the parameter vectors
+    for (size_t i = 1; i < csv_matrix_strings.size(); ++i) {
+      for (size_t j = 0; j < csv_matrix_strings[i].size(); ++j) {
+	if (csv_matrix_strings[i][j] != "") {
+	  double d = strtor(csv_matrix_strings[i][j].c_str());
+	  parameters[names_parms.at(csv_parameter_col_headings[j])].
+	    push_back(d);
+	}
+      }
+    }
+  } catch (std::exception &e) {
+    throw SimulationException(e.what());
   }
 }
 
@@ -393,18 +452,19 @@ Simulation::set_agent_csv_initializer(const char *filename, char delim)
     if (csv_matrix_strings.size() == 0)
       throw SimulationException("No headings in CSV file.");
 
-    csv_matrix_ = convert_csv_strings_to_reals(csv_matrix_strings);
+    csv_agent_matrix_ = convert_csv_strings_to_reals(csv_matrix_strings);
     // Process header
     bool num_found = false;
-    csv_col_headings_ = csv_matrix_strings[0];
-    for (size_t i = 0; i < csv_col_headings_.size(); ++i) {
-      if (csv_col_headings_[i] == "#") {
+    csv_agent_col_headings_ = csv_matrix_strings[0];
+    for (size_t i = 0; i < csv_agent_col_headings_.size(); ++i) {
+      if (csv_agent_col_headings_[i] == "#") {
 	if (num_found == true)
 	  throw SimulationException("Two rows with number of agents in csv.");
 	csv_num_agents_col_ = i;
 	num_found = true;
       } else {
-	if (names_states.find(csv_col_headings_[i]) == names_states.end())
+	if (names_states.find(csv_agent_col_headings_[i]) ==
+	    names_states.end())
 	  throw SimulationException("CSV key not found in state table");
       }
     }

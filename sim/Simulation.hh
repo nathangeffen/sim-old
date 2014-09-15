@@ -12,8 +12,8 @@ namespace sim {
     size_t current_agent_index_;
     std::list <GlobalStateInit> init_global_state_funcs_;
     std::list <AgentInit> init_agent_funcs_;
-    std::vector <std::string> csv_col_headings_;
-    std::vector <std::vector <real> > csv_matrix_;
+    std::vector <std::string> csv_agent_col_headings_;
+    std::vector <std::vector <real> > csv_agent_matrix_;
     size_t csv_num_agents_col_;
 #ifdef SIM_VECTORIZE
     size_t num_parms_;
@@ -57,6 +57,12 @@ namespace sim {
       const char * name;
     };
     void set_parameters(const std::initializer_list< const parameter_parms_>);
+    void set_parameters_from_csv();
+    void set_parameters_csv_initializer(const char *filename, char delim=',');
+    void set_parameter_name(const unsigned parameter, const char *name);
+    void set_parameter_names(std::initializer_list< std::pair <
+			     const unsigned, const char * > >
+			     parameter_names);
     void set_state_name(const unsigned state, const char *name);
     void set_state_names(std::initializer_list< std::pair <
 			 const unsigned, const char * > >
